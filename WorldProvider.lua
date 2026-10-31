@@ -340,7 +340,7 @@ local watchElapsed = 0
 watch:SetScript("OnUpdate", function(_, dt)
   if not marks.opts then return end
   watchElapsed = watchElapsed + (tonumber(dt) or 0)
-  if watchElapsed < 0.03 then return end
+  if watchElapsed < 0.15 then return end -- (31.10.2026, D19) was 0.03; the events below clear at once
   watchElapsed = 0
   local map = WorldMapFrame
   if not Shown(map) or InCombatLockdown() or not MarksOn() then return end

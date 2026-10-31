@@ -3,7 +3,7 @@
 ## Notes: Map layer of the Don addons on WoW Forever: pins on the world map, points on the minimap, the direction arrow and the compass for Guildon, Questdon and the other Don addons, grouped and kept below Questie and GatherMate. Shows nothing by itself; loads with the addons that need it.
 ## Notes-deDE: Kartenebene der Don-Addons für WoW Forever: Pins auf der Weltkarte, Punkte auf der Minikarte, Richtungspfeil und Kompass für Guildon, Questdon und die anderen Don-Addons, gebündelt und unter Questie und GatherMate. Zeigt selbst nichts und lädt mit den Addons, die es brauchen.
 ## Author: DonCoohd
-## Version: 1.1.0
+## Version: 1.2.0
 ## X-Curse-Project-ID: 1774431
 ## Category: Map & Minimap
 ## Category-deDE: Karte und Minikarte

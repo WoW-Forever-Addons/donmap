@@ -26,10 +26,11 @@ local NAVY = { 0.08, 0.09, 0.19 }
 local PRIO = { auto = 1, guide = 2, click = 3 }
 -- the arrow's words: from the controlling addon when it has them (Questdon speaks nine languages, DonMap two)
 local control
+local function Index(t, k) return t[k] end -- (31.10.2026, D19) one function, no closure per call
 local function T(key)
   local cl = control and control.L
   if type(cl) == "table" then
-    local ok, v = pcall(function() return cl[key] end)
+    local ok, v = pcall(Index, cl, key)
     if ok and type(v) == "string" then return v end
   end
   return L[key]
@@ -41,6 +42,8 @@ local arrow
 -- control: { id, title, L, look, runs, ghost, view, onRightClick, tooltip } (above, with T)
 local targets, seq = {}, 0 -- source -> { t =, prio =, seq = } or { fn =, seq = }
 local state = {}
+local TICK, TICK_IDLE = 0.03, 0.25 -- (31.10.2026, D19) seconds between updates with a target and without
+local elapsed = 0 -- since the last update
 local current, currentSrc, currentPrio
 local arrivedAt = { mapID = nil, x = nil, y = nil }
 
@@ -125,6 +128,7 @@ function ns.SetArrowTarget(source, target, prio)
   if type(target) ~= "table" then targets[source] = nil return end
   seq = seq + 1
   targets[source] = { t = target, prio = tonumber(prio) or PRIO.guide, seq = seq }
+  elapsed = 1 -- drawn at the next frame, also after the slow clock without a target
   if arrow and ns.ArrowRuns() then arrow:Show() end
 end
 
@@ -133,6 +137,7 @@ function ns.SetArrowProvider(source, fn)
   if type(fn) ~= "function" then targets[source] = nil return end
   seq = seq + 1
   targets[source] = { fn = fn, seq = seq }
+  elapsed = 1
 end
 
 ---------------------------------------------------------------------------
@@ -140,15 +145,22 @@ end
 ---------------------------------------------------------------------------
 local users = {} -- id -> true: someone reads the arrow's state (a compass in a window)
 function ns.SetArrowUser(id, on) users[tostring(id)] = on and true or nil if ns.ApplyArrowLook then ns.ApplyArrowLook() end end
+-- (31.10.2026, API 5) id -> true: a window's compass shows the way (Leveldon without Questdon): the arrow keeps
+-- working for it but draws nothing, as Questdon does for a guide (its Arrow.lua Ghost with GuideActive)
+local compasses = {}
+function ns.SetArrowCompass(id, on)
+  compasses[tostring(id)] = on and true or nil
+  if ns.ApplyArrowLook then ns.ApplyArrowLook() end
+end
 
 local function Runs()
   if control and control.runs then return ns.Call(control.runs) and true or false end
-  return (Look().arrow or next(users)) and true or false
+  return (Look().arrow or next(users) or next(compasses)) and true or false
 end
 ns.ArrowRuns = Runs
 local function Ghost()
   if control and control.ghost then return ns.Call(control.ghost) and true or false end
-  return not Look().arrow
+  return (not Look().arrow or next(compasses) ~= nil) and true or false
 end
 ns.ArrowGhost = Ghost
 
@@ -236,8 +248,14 @@ end
 -- "ghost" (a compass shows the way instead), it keeps working but draws nothing and takes no clicks.
 function ns.ArrowStateRaw() return state end
 
+-- (31.10.2026, D19) rotation, colour and shown state only when they change (standing still: nothing is set); a turn
+-- below TURN_STEP radians (0.17 degrees) is not seen and waits for the next
+local TURN_STEP = 0.003
 local function Turn(self, angle)
   state.angle = angle
+  local last = self.dmAngle
+  if last and math.abs(angle - last) < TURN_STEP then return end
+  self.dmAngle = angle
   self.icon:SetRotation(angle)
   self.glow:SetRotation(angle)
   self.shadow:SetRotation(angle)
@@ -247,12 +265,15 @@ local function ShowNeedle(self, shown, nearness)
   state.needle, state.nearness = shown and true or false, shown and (nearness or 0) or nil
   if shown and Ghost() then shown = false end
   if shown then
-    local n = nearness or 0
+    local n = math.floor((nearness or 0) * 100 + 0.5) / 100 -- steps of 1 %: the shine does not change every frame
+    if self.dmNeedle == true and self.dmNear == n then return end
+    self.dmNeedle, self.dmNear = true, n
     local v = 0.78 + 0.22 * n -- matte antique gold far away, full shine near
     self.icon:SetVertexColor(v, v, v * 0.96, 1)
     self.glow:SetAlpha(0.45 * n)
     self.icon:Show() self.glow:Show() self.shadow:Show()
-  else
+  elseif self.dmNeedle ~= false then
+    self.dmNeedle, self.dmNear = false, nil
     self.icon:Hide() self.glow:Hide() self.shadow:Hide()
   end
 end
@@ -534,12 +555,12 @@ local function Create()
   arrow.dist:SetPoint("TOP", arrow.label, "BOTTOM", 0, -S.rowGap)
   box:Hide()
 
-  -- Throttled (33 times a second); the update itself runs protected. No closure or table per frame.
-  local elapsed = 0
+  -- Throttled (33 times a second with a target, 4 without: then it only looks whether one came; a target handed over
+  -- with SetArrowTarget is drawn at the next frame); the update itself runs protected. No closure or table per frame.
   local function UpdateArrow() Update(arrow) end
   arrow:SetScript("OnUpdate", function(_, dt)
     elapsed = elapsed + (tonumber(dt) or 0)
-    if elapsed < 0.03 then return end
+    if elapsed < (state.t and TICK or TICK_IDLE) then return end
     elapsed = 0
     ns.Safe("arrow", UpdateArrow)
   end)

@@ -39,36 +39,83 @@ function ns.Sizes(src, where)
   return size, gsize, tonumber(near) or 0
 end
 
--- Items { pt, x, y, key } in pixels; items closer than "near" become one group at their middle. Sorted by key first
+-- Items { pt, i, x, y, key } in pixels; items closer than "near" become one group at their middle. Sorted by key first
 -- (a source gives a name or id), so the same points always make the same groups. Each group: { x, y, members = { pt } }.
-function ns.Group(items, near)
-  table.sort(items, function(a, b)
-    if a.key ~= b.key then return a.key < b.key end
-    return a.i < b.i
-  end)
-  local groups = {}
+-- (31.10.2026, Runde 6) No new tables while the player walks: every source keeps a buffer per place ("world",
+-- "minimap") with its item and group tables, which every draw overwrites. Group k always belongs to pin k, so
+-- pin.points (= the group's members) is the pin's own table and shows what the pin shows.
+local function ByKey(a, b)
+  if a.key ~= b.key then return a.key < b.key end
+  return a.i < b.i
+end
+
+-- the empty buffer of a source for one place, before a draw
+function ns.Buffer(src, where)
+  local all = src.buf
+  if not all then all = {} src.buf = all end
+  local buf = all[where]
+  if not buf then
+    buf = { pool = {}, items = {}, n = 0, used = 0, groups = {}, ng = 0 }
+    all[where] = buf
+  end
+  buf.n = 0
+  return buf
+end
+
+-- one item into the buffer
+function ns.AddItem(buf, pt, i, x, y)
+  local n = buf.n + 1
+  buf.n = n
+  local it = buf.pool[n]
+  if not it then it = {} buf.pool[n] = it end
+  local k = pt.key or pt.label or ""
+  if type(k) ~= "string" then -- a number key as text once per point, not every draw
+    if pt._dmKeyOf ~= k then pt._dmKey, pt._dmKeyOf = tostring(k), k end
+    k = pt._dmKey
+  end
+  it.pt, it.i, it.x, it.y, it.key = pt, i, x, y, k
+  buf.items[n] = it
+end
+
+-- groups the buffer's items; returns the groups (reused tables) and their number
+function ns.Group(buf, near)
+  local items, n = buf.items, buf.n
+  for k = #items, n + 1, -1 do items[k] = nil end
+  for k = n + 1, buf.used do buf.pool[k].pt = nil end -- no hold on points that left
+  buf.used = n
+  table.sort(items, ByKey)
+  local groups, ng = buf.groups, 0
   local n2 = near > 0 and near * near or -1
-  for _, it in ipairs(items) do
+  for idx = 1, n do
+    local it = items[idx]
     local hit
     if n2 > 0 then
-      for _, g in ipairs(groups) do
+      for gi = 1, ng do
+        local g = groups[gi]
         if (g.x - it.x) ^ 2 + (g.y - it.y) ^ 2 <= n2 then hit = g break end
       end
     end
     if hit then
       local m = hit.members
-      m[#m + 1] = it.pt
-      local n = #m
-      hit.x, hit.y = hit.x + (it.x - hit.x) / n, hit.y + (it.y - hit.y) / n
+      local c = #m + 1
+      m[c] = it.pt
+      hit.x, hit.y = hit.x + (it.x - hit.x) / c, hit.y + (it.y - hit.y) / c
     else
-      groups[#groups + 1] = { x = it.x, y = it.y, members = { it.pt } }
+      ng = ng + 1
+      local g = groups[ng]
+      if not g then g = { members = {} } groups[ng] = g end
+      local m = g.members
+      for k = #m, 2, -1 do m[k] = nil end
+      m[1] = it.pt
+      g.x, g.y = it.x, it.y
     end
   end
-  return groups
-end
-
-function ns.Item(pt, i, x, y)
-  return { pt = pt, i = i, x = x, y = y, key = tostring(pt.key or pt.label or "") }
+  for gi = ng + 1, buf.ng do -- groups no longer drawn let their points go (their pins are hidden)
+    local m = groups[gi].members
+    for k = #m, 1, -1 do m[k] = nil end
+  end
+  buf.ng = ng
+  return groups, ng
 end
 
 ---------------------------------------------------------------------------
@@ -139,6 +186,9 @@ local function Canvas()
   return sc and sc.Child, sc
 end
 
+-- whole screen pixels: the canvas is drawn at "scale", so a size or place of k / scale is k pixels on the screen
+local function Px(v, scale) return math.floor(v * scale + 0.5) / scale end
+
 -- Draws a source on the open world map. Without force only when the map, its size, zoom, the sizes or the points changed.
 -- Returns the number of pins.
 function ns.DrawWorld(src, force)
@@ -156,36 +206,43 @@ function ns.DrawWorld(src, force)
   local size, gsize, near = ns.Sizes(src, "world")
   local lv = ns.Num(ns.Ask(canvas, "GetFrameLevel"))
   -- (M3) the points' signature apart: a long list made a new long string every 0.1 s while the map was open
-  local sig = table.concat({ map or 0, w, h, scale, size, gsize, near, lv or -1 }, ":")
-  if not force and sig == src.view.world and src.view.worldPts == src.sig then return src.n.world end
-  src.view.world, src.view.worldPts = sig, src.sig
-  -- whole screen pixels: the canvas is drawn at "scale", so a size or place of k / scale is k pixels on the screen
-  local function Px(v) return math.floor(v * scale + 0.5) / scale end
-  local sizeW, sizeG = Px(size / scale), Px(gsize / scale)
+  -- (31.10.2026, D18) the view in numbers on src.view: no table and no string every 0.1 s
+  local v, vmap, vlv = src.view, map or 0, lv or -1
+  if not force and v.world and v.worldPts == src.sig and v.wmap == vmap and v.ww == w and v.wh == h and v.wsc == scale
+      and v.wz == size and v.wg == gsize and v.wnear == near and v.wlv == vlv then
+    return src.n.world
+  end
+  v.world, v.worldPts = true, src.sig
+  v.wmap, v.ww, v.wh, v.wsc, v.wz, v.wg, v.wnear, v.wlv = vmap, w, h, scale, size, gsize, near, vlv
+  local sizeW, sizeG = Px(size / scale, scale), Px(gsize / scale, scale)
   local n, onMap = 0, 0
   if map and w > 0 then
-    local items = {}
+    local buf = ns.Buffer(src, "world")
     for i, pt in ipairs(src.points) do
       if pt.world ~= false and (not pt.only or pt.mapID == map) then -- (M3) only: not on the maps above
         local x, y = ns.PosOnMap(pt.mapID, pt.x, pt.y, map)
-        if x then items[#items + 1] = ns.Item(pt, i, x * w, y * h) end
+        if x then ns.AddItem(buf, pt, i, x * w, y * h) end
       end
     end
-    onMap = #items
+    onMap = buf.n
     local level = ns.WorldLevel(ns.Layer(src), lv)
-    for _, g in ipairs(ns.Group(items, near / scale)) do
+    local groups, ng = ns.Group(buf, near / scale)
+    for gi = 1, ng do
+      local g = groups[gi]
       n = n + 1
       local b = pins[n] or ns.NewPin(src, canvas, sizeW, "world")
       pins[n] = b
       if lv then ns.SetLevel(b, level) end
       ns.Paint(src, b, g.members, sizeW, sizeG, "world")
       b:ClearAllPoints()
-      b:SetPoint("CENTER", canvas, "TOPLEFT", Px(g.x), -Px(g.y))
+      b:SetPoint("CENTER", canvas, "TOPLEFT", Px(g.x, scale), -Px(g.y, scale))
       b:Show()
     end
   end
   ns.HideFrom(pins, n)
   src.n.world = n
-  src.info.world = { map = map, w = w, h = h, scale = scale, have = #src.points, onMap = onMap, pins = n, canvasLevel = lv }
+  local info = src.info.world or {}
+  info.map, info.w, info.h, info.scale, info.have, info.onMap, info.pins, info.canvasLevel = map, w, h, scale, #src.points, onMap, n, lv
+  src.info.world = info
   return n
 end

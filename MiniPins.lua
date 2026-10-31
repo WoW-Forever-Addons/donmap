@@ -98,25 +98,34 @@ function ns.DrawMini(src, force)
   local facing = ns.MinimapFacing()
   local shape = ns.MinimapShape()
   local size, gsize, near = ns.Sizes(src, "minimap")
-  local mlv = ns.Num(ns.Ask(mm, "GetFrameLevel"))
-  local sig = table.concat({ c0, math.floor(n0 * 10), math.floor(w0 * 10), facing and math.floor(facing * 100) or "n", radius, half,
-    shape, size, gsize, near, mlv or -1 }, ":")
-  if not force and sig == src.view.minimap and src.view.miniPts == src.sig then return src.n.minimap end
-  src.view.minimap, src.view.miniPts = sig, src.sig
-  local items = {}
+  local mlv = ns.Num(ns.Ask(mm, "GetFrameLevel")) or -1
+  -- (31.10.2026, D18) the last view in numbers on src.view, as DrawMiniSticky does: no table and no string every 0.1 s
+  local qn, qw, qf = math.floor(n0 * 10), math.floor(w0 * 10), facing and math.floor(facing * 100) or false
+  local v = src.view
+  if not force and v.minimap and v.miniPts == src.sig and v.mc == c0 and v.mn == qn and v.mw == qw and v.mf == qf
+      and v.mr == radius and v.mh == half and v.ms == shape and v.mz == size and v.mg == gsize and v.mnear == near
+      and v.mlv == mlv then
+    return src.n.minimap
+  end
+  v.minimap, v.miniPts = true, src.sig
+  v.mc, v.mn, v.mw, v.mf, v.mr, v.mh, v.ms, v.mz, v.mg, v.mnear, v.mlv = c0, qn, qw, qf, radius, half, shape, size, gsize, near, mlv
+  if mlv < 0 then mlv = nil end
+  local buf = ns.Buffer(src, "minimap") -- (31.10.2026, Runde 6) reused tables, WorldPins.lua ns.Group
   for i, pt in ipairs(src.points) do
     if pt.minimap ~= false then
       local c, pn, pw = ns.WorldPos(pt.mapID, pt.x, pt.y)
       if c == c0 then
         local x, y = ns.MinimapOffset(pn - n0, -(pw - w0), radius, half, facing)
-        if ns.OnMinimap(x, y, half, MARGIN, shape) then items[#items + 1] = ns.Item(pt, i, x, y) end
+        if ns.OnMinimap(x, y, half, MARGIN, shape) then ns.AddItem(buf, pt, i, x, y) end
       end
     end
   end
   local sizeM, sizeMG = math.floor(size + 0.5), math.floor(gsize + 0.5)
   local level = mlv and ns.MiniLevel(ns.Layer(src), mlv)
   local n = 0
-  for _, g in ipairs(ns.Group(items, near)) do
+  local groups, ng = ns.Group(buf, near)
+  for gi = 1, ng do
+    local g = groups[gi]
     n = n + 1
     local b = pins[n] or ns.NewPin(src, mm, sizeM, "minimap")
     pins[n] = b
@@ -128,7 +137,9 @@ function ns.DrawMini(src, force)
   end
   ns.HideFrom(pins, n)
   src.n.minimap = n
-  src.info.minimap = { radius = radius, half = half, facing = facing, shape = shape, have = #src.points, near = #items, pins = n }
+  local info = src.info.minimap or {}
+  info.radius, info.half, info.facing, info.shape, info.have, info.near, info.pins = radius, half, facing, shape, #src.points, buf.n, n
+  src.info.minimap = info
   return n
 end
 

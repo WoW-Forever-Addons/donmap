@@ -1,7 +1,7 @@
 local _, ns = ...
 
 ---------------------------------------------------------------------------
--- DonMapAPI (version 1, 2 and 3 below, DONCORE_PLAN.md "Anmelde-API"): other addons register a source and hand over points; DonMap
+-- DonMapAPI (versions 1 to 5 below, DONCORE_PLAN.md "Anmelde-API"): other addons register a source and hand over points; DonMap
 -- draws them. Versions only add, never change: an addon checks DonMapAPI.version >= what it needs.
 --
 --   local src = DonMapAPI.Register("guildon", {
@@ -207,6 +207,15 @@ API.GameMarkShown = function(map) return ns.GameMarkShown(map) end
 API.GameQuestMarkStats = function() return ns.gameMarks.stats end
 API.HiddenGameBlobs = function() return ns.gameMarks.hidden end
 API.GameRedrawPending = function() return ns.gameMarks.redraw and true or false end
+
+---------------------------------------------------------------------------
+-- Version 5 (31.10.2026): a guide's compass in its own window
+--   DonMapAPI.SetArrowCompass(id, on)         while on, the compass in that addon's window shows the way: the arrow
+--                                             runs for it but draws nothing (only without a controlling addon;
+--                                             Questdon has its own rule, QuestdonAPI.SetGuideCompass)
+---------------------------------------------------------------------------
+API.version = 5
+API.SetArrowCompass = function(id, on) return ns.SetArrowCompass(id, on) end
 
 DonMapAPI = API
 ns.API = API

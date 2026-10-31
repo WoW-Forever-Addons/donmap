@@ -1,7 +1,7 @@
 # DonMap
 
 The map layer of the Don addons for WoW Forever and WoW Classic Era, as an addon of its own.
-Guildon and Questdon need it (Leveldon through Questdon); CurseForge installs it together with them.
+Questdon, Leveldon and Guildon: Map & Members need it; CurseForge installs it together with them.
 
 What it does: other addons hand over points, DonMap draws them as pins on the world map and as points on the minimap.
 Points close together become one pin, the pins sit on whole pixels and below the marks of Questie and GatherMate,
@@ -15,7 +15,7 @@ by itself.
 - `/donmap arrow` shows or hides the arrow, `/donmap options` opens its settings (with Questdon they are in Questdon's options).
 - Saved variables: `DonMapDB` (which sources you switched off, the arrow's settings without Questdon).
 
-For addon authors: `DonMapAPI` (version 4: the arrow since 2, sticky minimap sources since 3, world map pins through the map's data provider and hiding the game's quest markers since 4), see `API.lua`.
+For addon authors: `DonMapAPI` (version 5: the arrow since 2, sticky minimap sources since 3, world map pins through the map's data provider and hiding the game's quest markers since 4, the arrow as a compass only (`SetArrowCompass`) since 5), see `API.lua`.
 
 ```lua
 local src = DonMapAPI.Register("myaddon", { title = "My addon", size = 16, group = 10 })
