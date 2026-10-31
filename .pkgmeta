@@ -1,8 +1,13 @@
 package-as: DonMap
 
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
 ignore:
   - .github
   - .gitignore
   - .pkgmeta
+  - CHANGELOG.md
 
 enable-nolib-creation: no
