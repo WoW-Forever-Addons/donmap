@@ -1,0 +1,8 @@
+package-as: DonMap
+
+ignore:
+  - .github
+  - .gitignore
+  - .pkgmeta
+
+enable-nolib-creation: no

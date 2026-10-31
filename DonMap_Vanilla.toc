@@ -1,0 +1,29 @@
+## Interface: 11509
+## Title: |cff3fa9f5Don|rMap
+## Notes: Map layer of the Don addons on WoW Classic Era: pins on the world map and points on the minimap for Guildon and the other Don addons, grouped and kept below Questie and GatherMate. Shows nothing by itself; loads with the addons that need it.
+## Notes-deDE: Kartenebene der Don-Addons für WoW Classic Era: Pins auf der Weltkarte und Punkte auf der Minikarte für Guildon und die anderen Don-Addons, gebündelt und unter Questie und GatherMate. Zeigt selbst nichts und lädt mit den Addons, die es brauchen.
+## Author: DonCoohd
+## Version: 1.1.0
+## X-Curse-Project-ID: 1774431
+## Category: Map & Minimap
+## Category-deDE: Karte und Minikarte
+## IconTexture: Interface\Icons\INV_Misc_Map_01
+## SavedVariables: DonMapDB
+## X-License: MIT License, Copyright (c) 2026 DonCoohd (LICENSE.txt).
+
+Libs\LibStub\LibStub.lua
+Libs\DonCore\DonCore.lua
+Libs\DonCore\Style.lua
+Libs\DonCore\Settings.lua
+Locales\enUS.lua
+Locales\deDE.lua
+Core.lua
+Geo.lua
+Layers.lua
+WorldPins.lua
+MiniPins.lua
+WorldProvider.lua
+Arrow.lua
+Compass.lua
+API.lua
+Options.lua

@@ -1,0 +1,298 @@
+local _, ns = ...
+
+---------------------------------------------------------------------------
+-- Points of the sources on the minimap (geometry from Questdon Minimap.lua 1.22, pins as in Guildon Map.lua): own
+-- buttons parented to the minimap, which is only read (size, zoom, shape). The player's world position is the middle;
+-- a point on the same continent sits at its distance in yards, scaled by the view radius, turned with the player when the
+-- minimap rotates. Caves and buildings with their own small map use the zone around them (ns.PlayerWorld).
+---------------------------------------------------------------------------
+local MARGIN = 4 -- pixels kept free at the minimap's edge
+
+-- Minimap view in yards (diameter) per zoom level 0-5, used only when the client has no C_Minimap.GetViewRadius.
+local DIAMETER = {
+  outdoor = { [0] = 466 + 2 / 3, 400, 333 + 1 / 3, 266 + 2 / 3, 200, 133 + 1 / 3 },
+  indoor = { [0] = 300, 240, 180, 120, 80, 50 },
+}
+
+-- Radius of the minimap view in yards; second value: where it comes from.
+function ns.MinimapRadius()
+  if C_Minimap and C_Minimap.GetViewRadius then
+    local r = ns.Num(ns.Call(C_Minimap.GetViewRadius))
+    if r and r > 0 then return r, "client" end
+  end
+  local zoom = Minimap and ns.Num(ns.Call(Minimap.GetZoom, Minimap)) or 0
+  zoom = math.max(0, math.min(5, math.floor(zoom)))
+  local indoors = IsIndoors and ns.Call(IsIndoors) == true or false
+  return DIAMETER[indoors and "indoor" or "outdoor"][zoom] / 2, "zoom"
+end
+
+-- (Questdon 1.22) Does the minimap rotate? A secret answer keeps the last readable one, else the minimap's compass ring
+-- tells; second value: where the answer comes from.
+local rotateCache
+local function ReadRotateCVar()
+  if C_CVar and C_CVar.GetCVarBool then
+    local v = ns.Call(C_CVar.GetCVarBool, "rotateMinimap")
+    if type(v) == "boolean" and ns.Usable(v) then return v end
+  end
+  local v = ns.Call((C_CVar and C_CVar.GetCVar) or GetCVar, "rotateMinimap")
+  if v == nil or not ns.Usable(v) then return nil end
+  return v == "1" or v == 1 or v == true
+end
+function ns.MinimapRotating()
+  local v = ReadRotateCVar()
+  if v ~= nil then rotateCache = v return v, "cvar" end
+  if rotateCache ~= nil then return rotateCache, "cached" end
+  local compass = MinimapCompassTexture
+  if type(compass) == "table" and compass.IsShown then
+    local ok, shown = pcall(compass.IsShown, compass)
+    if ok and type(shown) == "boolean" and ns.Usable(shown) then return shown, "compass" end
+  end
+  return false, "unknown"
+end
+
+-- radians counter-clockwise from north while the minimap rotates, else nil
+function ns.MinimapFacing()
+  if not ns.MinimapRotating() then return nil end
+  return ns.Num(ns.Call(GetPlayerFacing))
+end
+
+-- Offset in pixels from the minimap centre for a target (dNorth, dEast in yards from the player): x to the right, y up.
+function ns.MinimapOffset(dNorth, dEast, radius, halfSize, facing)
+  local x, y = dEast, dNorth
+  if facing then
+    local c, s = math.cos(facing), math.sin(facing)
+    x, y = dEast * c + dNorth * s, -dEast * s + dNorth * c
+  end
+  local k = halfSize / radius
+  return x * k, y * k
+end
+
+-- Inside the visible minimap? Round unless an addon says the minimap is square.
+function ns.MinimapShape()
+  local s = ns.Call(GetMinimapShape)
+  return type(s) == "string" and s or "ROUND"
+end
+function ns.OnMinimap(x, y, halfSize, margin, shape)
+  local r = halfSize - (margin or 0)
+  if (shape or ns.MinimapShape()) == "SQUARE" then return math.abs(x) <= r and math.abs(y) <= r end
+  return x * x + y * y <= r * r
+end
+
+local function Off(src)
+  ns.HideFrom(src.pins.minimap, 0)
+  src.n.minimap, src.view.minimap, src.view.miniPts = 0, nil, nil
+  return 0
+end
+
+-- Draws a source on the minimap. Without force only when the player moved or turned, the zoom, the sizes or the points
+-- changed. Returns the number of pins.
+function ns.DrawMini(src, force)
+  if src.opts.sticky then return ns.DrawMiniSticky(src, force) end
+  local pins = src.pins.minimap
+  local mm = Minimap
+  if not mm or not ns.Enabled(src, "minimap") or (mm.IsVisible and not mm:IsVisible()) then return Off(src) end
+  local c0, n0, w0 = ns.PlayerWorld()
+  if not c0 then return Off(src) end
+  local radius = ns.MinimapRadius()
+  local half = (ns.Num(ns.Ask(mm, "GetWidth")) or 140) / 2
+  local facing = ns.MinimapFacing()
+  local shape = ns.MinimapShape()
+  local size, gsize, near = ns.Sizes(src, "minimap")
+  local mlv = ns.Num(ns.Ask(mm, "GetFrameLevel"))
+  local sig = table.concat({ c0, math.floor(n0 * 10), math.floor(w0 * 10), facing and math.floor(facing * 100) or "n", radius, half,
+    shape, size, gsize, near, mlv or -1 }, ":")
+  if not force and sig == src.view.minimap and src.view.miniPts == src.sig then return src.n.minimap end
+  src.view.minimap, src.view.miniPts = sig, src.sig
+  local items = {}
+  for i, pt in ipairs(src.points) do
+    if pt.minimap ~= false then
+      local c, pn, pw = ns.WorldPos(pt.mapID, pt.x, pt.y)
+      if c == c0 then
+        local x, y = ns.MinimapOffset(pn - n0, -(pw - w0), radius, half, facing)
+        if ns.OnMinimap(x, y, half, MARGIN, shape) then items[#items + 1] = ns.Item(pt, i, x, y) end
+      end
+    end
+  end
+  local sizeM, sizeMG = math.floor(size + 0.5), math.floor(gsize + 0.5)
+  local level = mlv and ns.MiniLevel(ns.Layer(src), mlv)
+  local n = 0
+  for _, g in ipairs(ns.Group(items, near)) do
+    n = n + 1
+    local b = pins[n] or ns.NewPin(src, mm, sizeM, "minimap")
+    pins[n] = b
+    if level then ns.SetLevel(b, level) end
+    ns.Paint(src, b, g.members, sizeM, sizeMG, "minimap")
+    b:ClearAllPoints()
+    b:SetPoint("CENTER", mm, "CENTER", math.floor(g.x + 0.5), math.floor(g.y + 0.5))
+    b:Show()
+  end
+  ns.HideFrom(pins, n)
+  src.n.minimap = n
+  src.info.minimap = { radius = radius, half = half, facing = facing, shape = shape, have = #src.points, near = #items, pins = n }
+  return n
+end
+
+---------------------------------------------------------------------------
+-- (M3, 30.10.2026) Sticky sources (opts.sticky; Questdon's minimap pins, from Questdon Minimap.lua 1.22 and 1.3.5): the
+-- source groups its points itself and DonMap only places them. Every point keeps its button while it stays in view
+-- (point.button; a button handed out by place in the list re-dressed all after one that left the view and could swap
+-- the pin under the mouse). A point may bring its world position (wc, wn, ww: continent, yards north, yards west),
+-- else it is worked out once from mapID, x, y and kept on the point. The pins are not put on whole pixels. hide = true leaves a point out (a member of a
+-- bundle), range = yards draws it only that close. No table is made while the player walks: the last view is kept
+-- in numbers and the buttons of the points that left are given back.
+--   opts.view() -> c, n, w, radius, half, facing, shape   the source reads the minimap itself (nil: nothing shown)
+--   opts.dress(button, point, size)                      a point got a button (newPin makes new ones)
+--   opts.place(button, point, dNorth, dEast)             every time the point is placed
+--   opts.release(button, point)                          the point gave its button back
+--   opts.rebundle(k, radius)                             new points or another zoom (k = pixels per yard): every
+--                                                        button is given back first, so all are dressed anew
+--   opts.max                                             at most this many pins (the first in the list)
+--   opts.miniLevel                                       levels above the minimap (else by the layer, Layers.lua)
+--   opts.clock = false                                   DonMap's clock leaves the source alone: it calls
+--                                                        src:Refresh("minimap") itself
+---------------------------------------------------------------------------
+local function StickyState(src)
+  local st = src.sticky
+  if not st then
+    st = { free = {}, held = {}, spare = {}, round = 0, dirty = true, last = {} }
+    src.sticky = st
+  end
+  return st
+end
+
+local function GiveBack(src, st, pt)
+  local b = pt.button
+  if not b then return end
+  b:Hide()
+  b.point, pt.button = nil, nil
+  st.free[#st.free + 1] = b
+  if src.opts.release then src.opts.release(b, pt) end
+end
+
+-- every button back (src:Release, a new bundling, nothing to show); the next draw places all anew
+function ns.ReleaseSticky(src)
+  local st = StickyState(src)
+  for _, list in ipairs({ st.held, st.spare }) do -- spare: a draw that stopped on an error left its points there
+    for i = #list, 1, -1 do
+      GiveBack(src, st, list[i])
+      list[i] = nil
+    end
+  end
+  st.dirty = true
+end
+
+local function StickyOff(src)
+  ns.ReleaseSticky(src)
+  src.n.minimap = 0
+  return 0, false
+end
+
+-- the point's world position, worked out once
+local function PointWorld(pt)
+  if pt.wc then return pt.wc, pt.wn, pt.ww end
+  if pt._dmM ~= pt.mapID or pt._dmX ~= pt.x or pt._dmY ~= pt.y then
+    pt._dmC, pt._dmN, pt._dmW = ns.WorldPos(pt.mapID, pt.x, pt.y)
+    pt._dmM, pt._dmX, pt._dmY = pt.mapID, pt.x, pt.y
+  end
+  return pt._dmC, pt._dmN, pt._dmW
+end
+
+local function DefaultView()
+  local c0, n0, w0 = ns.PlayerWorld()
+  if not c0 then return nil end
+  local facing
+  if ns.MinimapRotating() then
+    facing = ns.Num(ns.Call(GetPlayerFacing))
+    if not facing then return nil end -- turning, but the facing is secret: cannot place them right
+  end
+  local half = (ns.Num(ns.Ask(Minimap, "GetWidth")) or 0) / 2
+  return c0, n0, w0, ns.MinimapRadius(), half, facing, ns.MinimapShape()
+end
+
+-- Draws a sticky source. Without force only when the view, the points or the sizes changed. Returns the number of pins
+-- and whether it placed them.
+function ns.DrawMiniSticky(src, force)
+  local mm = Minimap
+  if not mm or not ns.Enabled(src, "minimap") then return StickyOff(src) end
+  local st = StickyState(src)
+  if force then st.dirty = true end
+  local o = src.opts
+  local c0, n0, w0, radius, half, facing, shape
+  if o.view then c0, n0, w0, radius, half, facing, shape = o.view() else c0, n0, w0, radius, half, facing, shape = DefaultView() end
+  if not (c0 and n0 and w0 and radius and radius > 0 and half and half > 0) then return StickyOff(src) end
+  shape = shape or "ROUND"
+  local size = ns.Sizes(src, "minimap")
+  local mlv = ns.Num(ns.Ask(mm, "GetFrameLevel"))
+  local L = st.last
+  if not st.dirty and st.points == src.points and st.sig == src.sig and L.c == c0 and L.n == n0 and L.w == w0
+      and L.f == facing and L.r == radius and L.h == half and L.s == shape and L.size == size and L.lv == mlv then
+    return src.n.minimap, false
+  end
+  L.c, L.n, L.w, L.f, L.r, L.h, L.s, L.size, L.lv = c0, n0, w0, facing, radius, half, shape, size, mlv
+  st.dirty = true -- until the draw ends: an error in a callback below draws all anew next time
+  local k = half / radius
+  if st.points ~= src.points or st.sig ~= src.sig or st.k ~= k then
+    if o.rebundle then
+      ns.ReleaseSticky(src)
+      o.rebundle(k, radius)
+    end
+    st.points, st.sig, st.k = src.points, src.sig, k
+  end
+  local max = tonumber(o.max) or math.huge
+  local reach2 = (radius * 1.5) ^ 2 -- cheap cut before the rotation: farther than the view's corner (square minimap)
+  -- opts.miniLevel: levels above the minimap (Questdon 6, above GatherMate as before), else by the layer
+  local level = mlv and (tonumber(o.miniLevel) and mlv + o.miniLevel or ns.MiniLevel(ns.Layer(src), mlv))
+  local sizeM = math.floor(size + 0.5)
+  st.round = st.round + 1
+  local round, held, nh, n = st.round, st.spare, 0, 0
+  for i = #held, 1, -1 do GiveBack(src, st, held[i]) held[i] = nil end -- left by a draw that stopped on an error
+  local all = src.pins.minimap
+  for _, pt in ipairs(src.points) do
+    if n >= max then break end
+    if not pt.hide and pt.minimap ~= false then
+      local c, pn, pw = PointWorld(pt)
+      if c == c0 then
+        local dn, de = pn - n0, -(pw - w0)
+        local d2 = dn * dn + de * de
+        if d2 <= reach2 and (not pt.range or d2 <= pt.range * pt.range) then
+          local x, y = ns.MinimapOffset(dn, de, radius, half, facing)
+          if ns.OnMinimap(x, y, half, MARGIN, shape) then
+            n = n + 1
+            local b = pt.button
+            if not b then
+              b = table.remove(st.free)
+              if not b then
+                b = ns.NewPin(src, mm, sizeM, "minimap")
+                all[#all + 1] = b
+              end
+              pt.button, b.point = b, pt
+              if o.dress then o.dress(b, pt, sizeM) end
+            end
+            if level then ns.SetLevel(b, level) end
+            if o.place then o.place(b, pt, dn, de) end
+            b:ClearAllPoints()
+            b:SetPoint("CENTER", mm, "CENTER", x, y) -- not on whole pixels: a pin glides while you walk (Questdon)
+            b:Show()
+            pt._dmRound = round
+            nh = nh + 1
+            held[nh] = pt
+          end
+        end
+      end
+    end
+  end
+  -- the points that left the view (or the list) give their buttons back
+  local old = st.held
+  for i = #old, 1, -1 do
+    local pt = old[i]
+    if pt._dmRound ~= round then GiveBack(src, st, pt) end
+    old[i] = nil
+  end
+  st.held, st.spare = held, old
+  st.dirty = false
+  src.n.minimap = n
+  local info = src.info.minimap or {}
+  info.radius, info.half, info.facing, info.shape, info.have, info.pins = radius, half, facing, shape, #src.points, n
+  src.info.minimap = info
+  return n, true
+end
