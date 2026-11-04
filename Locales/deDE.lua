@@ -50,3 +50,10 @@ L["/donmap arrow: show or hide the arrow. /donmap options: its settings."] = "/d
 L["The arrow is now %s."] = "Der Pfeil ist jetzt %s."
 L["Hides the plate behind the arrow's text and its frame: only the arrow and the writing stay."] =
   "Blendet die Tafel hinter dem Text des Pfeils und ihren Rahmen aus: nur Pfeil und Schrift bleiben."
+
+-- DonCore's Settings and options window (01.11.2026): Blizzard's short page and the Tools tab (from Luredon)
+L["Open"] = "Öffnen"
+L["Options"] = "Optionen"
+L["Status"] = "Status"
+L["Tools"] = "Werkzeuge"
+L["Settings"] = "Einstellungen"

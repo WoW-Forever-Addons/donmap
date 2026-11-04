@@ -68,13 +68,53 @@ function ns.MinimapOffset(dNorth, dEast, radius, halfSize, facing)
 end
 
 -- Inside the visible minimap? Round unless an addon says the minimap is square.
+-- (02.11.2026) EllesmereUI makes the minimap square without GetMinimapShape. Its own reading counts first
+-- (EllesmereUI._ModuleNS.EllesmereUIMinimap.MinimapShape: "circle", "textured_circle", "square", "rectangular").
+-- A crop (rectangular 4:3, a square frame's title bar) keeps the square canvas and masks a strip off the top and the
+-- bottom; EUI sets the minimap's hit rect to the visible part, so its top inset is that strip: "SQUARE:<px>".
+-- Questdon hands the same strings through opts.view (Questdon/Minimap.lua).
+-- (02.11.2026) GetMinimapShape's mixed shapes (SexyMap and others; the table as in LibDBIcon): per quarter round (true)
+-- or square, quarters 1 right below, 2 left below, 3 right above, 4 left above.
+local QUARTERS = {
+  ["CORNER-TOPLEFT"] = { false, false, false, true }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
+  ["CORNER-BOTTOMLEFT"] = { false, true, false, false }, ["CORNER-BOTTOMRIGHT"] = { true, false, false, false },
+  ["SIDE-LEFT"] = { false, true, false, true }, ["SIDE-RIGHT"] = { true, false, true, false },
+  ["SIDE-TOP"] = { false, false, true, true }, ["SIDE-BOTTOM"] = { true, true, false, false },
+  ["TRICORNER-TOPLEFT"] = { false, true, true, true }, ["TRICORNER-TOPRIGHT"] = { true, false, true, true },
+  ["TRICORNER-BOTTOMLEFT"] = { true, true, false, true }, ["TRICORNER-BOTTOMRIGHT"] = { true, true, true, false },
+}
+local cropOf = { SQUARE = 0 }
+local function Crop(shape)
+  local c = cropOf[shape]
+  if c == nil then
+    c = type(shape) == "string" and tonumber(shape:match("^SQUARE:(%d+)$")) or false
+    cropOf[shape] = c
+  end
+  return c
+end
+local function EllesmereShape()
+  local eui = type(EllesmereUI) == "table" and type(EllesmereUI._ModuleNS) == "table"
+    and EllesmereUI._ModuleNS.EllesmereUIMinimap
+  local s = type(eui) == "table" and ns.Call(eui.MinimapShape)
+  if type(s) ~= "string" then return nil end
+  if s == "circle" or s == "textured_circle" then return "ROUND" end
+  local _, _, top = ns.Call(Minimap and Minimap.GetHitRectInsets, Minimap)
+  top = ns.Num(top) and math.floor(top + 0.5) or 0
+  return top > 0 and "SQUARE:" .. top or "SQUARE"
+end
 function ns.MinimapShape()
+  local e = EllesmereShape()
+  if e then return e end
   local s = ns.Call(GetMinimapShape)
   return type(s) == "string" and s or "ROUND"
 end
 function ns.OnMinimap(x, y, halfSize, margin, shape)
   local r = halfSize - (margin or 0)
-  if (shape or ns.MinimapShape()) == "SQUARE" then return math.abs(x) <= r and math.abs(y) <= r end
+  shape = shape or ns.MinimapShape()
+  local crop = Crop(shape)
+  if crop then return math.abs(x) <= r and math.abs(y) <= r - crop end
+  local q = QUARTERS[shape]
+  if q and not q[(x < 0 and 2 or 1) + (y > 0 and 2 or 0)] then return math.abs(x) <= r and math.abs(y) <= r end
   return x * x + y * y <= r * r
 end
 

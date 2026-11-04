@@ -1,5 +1,13 @@
 # Changes
 
+## 1.3.0
+
+- **Square and shaped minimaps:** EllesmereUI's square or 4:3 cut minimap and the mixed shapes of other minimap addons (for example SexyMap) are recognised, so points, routes and pins show in the corners too.
+- **Options in the Don family window:** DonMap's options sit in the shared options window of the Don addons (`/donmap options`).
+- **Window size:** all Don windows share one scale, 80 % by default, set from 60 to 110 % under General > Window in the options window. Saved window sizes are reset once, places stay.
+- **Addon list:** the addon has its own logo in the game's addon list.
+- **Update note:** new files, so restart the game after updating (a /reload is not enough).
+
 ## 1.2.0
 
 - **First full release.** DonMap is the map layer of the Don addons, for WoW Forever and WoW Classic Era in one download. **Questdon**, **Leveldon** and **Guildon: Map & Members** need it; the CurseForge app installs it with them. If you install by hand, put the `DonMap` folder next to them in `Interface\AddOns`.

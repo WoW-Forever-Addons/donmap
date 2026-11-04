@@ -18,12 +18,18 @@ local function Status()
   return lines
 end
 
+local function Help()
+  return L["/donmap <source>: switch a source on or off. /donmap diag: levels of the other addons' pins."] .. "\n"
+    .. L["/donmap arrow: show or hide the arrow. /donmap options: its settings."]
+end
+
 local function Build()
   if category or ns.ArrowControl() then return end
   local S = ns.Style
   category = ns.BuildSettings({
     name = "DonMap",
     status = Status,
+    help = Help, -- (01.11.2026) the commands on the Tools tab of DonCore's options window
     tools = {
       { "Reset position", "Reset", function() ns.ResetArrowPosition() end, "Puts the arrow back to its default place." },
     },
@@ -43,12 +49,21 @@ local function Build()
 end
 ns.BuildOptions = Build
 
+-- (01.11.2026, StyleKit 2 step 3) DonCore's options window of all Don addons (no Blizzard panel, so also in combat):
+-- DonMap's tab, or while an addon controls the arrow that addon's options. Blizzard's settings only without that
+-- window (an older DonCore), and those stay closed in combat.
 function ns.OpenOptions()
+  local ctl, Opt = ns.ArrowControl(), LibStub("DonCore-1.0"):Get("Options", 1)
+  if ctl then
+    if Opt and type(ctl.title) == "string" and Opt.addons[ctl.title] and Opt.Open(ctl.title) then return end
+  elseif ns.OpenDonOptions and ns.OpenDonOptions() then
+    return
+  end
   if InCombatLockdown and InCombatLockdown() then ns.Print(L["Options cannot be opened in combat."]) return end
-  if category and Settings and Settings.OpenToCategory then
+  if category and not ctl and Settings and Settings.OpenToCategory then
     Settings.OpenToCategory(category:GetID())
   else
-    ns.Print(L["The arrow's settings are in %s's options."]:format(ns.ArrowControl() and ns.ArrowControl().title or "?"))
+    ns.Print(L["The arrow's settings are in %s's options."]:format(ctl and ctl.title or "?"))
   end
 end
 
