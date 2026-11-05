@@ -1,5 +1,10 @@
 # Changes
 
+## 1.3.2
+
+- **Fixed on WoW Forever:** typing a /run line in the chat no longer shows "DonMap has been blocked from an action only available to the Blizzard UI".
+- **Tooltips** of wide rows open at the mouse pointer.
+
 ## 1.3.1
 
 - **Pins above quest marks:** an addon can put its world map pins above Questdon's quest pins. Guildon uses it, so a guild member under a "!" can be hovered and clicked again.

@@ -158,5 +158,6 @@ function ns.Slash(msg)
   print("  " .. L["/donmap <source>: switch a source on or off. /donmap diag: levels of the other addons' pins."])
   print("  " .. L["/donmap arrow: show or hide the arrow. /donmap options: its settings."])
 end
-SlashCmdList = SlashCmdList or {}
-SlashCmdList.DONMAP = function(msg) ns.Slash(msg) end
+-- (05.11.2026) never assign the global SlashCmdList itself: that taints every chat slash command, and the first /run
+-- then fails ("DonMap has been blocked", SetAllowDangerousScripts, taint.log on Forever live).
+if type(SlashCmdList) == "table" then SlashCmdList.DONMAP = function(msg) ns.Slash(msg) end end
