@@ -15,6 +15,31 @@ function ns.Layer(src)
   return math.max(0, math.min(ns.LAYER_MAX, math.floor(v)))
 end
 
+-- (05.11.2026, Daniel: "aber weltmap sollte hovern möglich sein", a guild member under Questdon's "!") a source with
+-- opts.top = true: its world map pins go one above the highest of Questdon's quest pins (they take their level from the
+-- map's own level manager, above the fixed 2010 + layer). Looked up at most once a second.
+local TOP_TEMPLATES = { "QuestdonQuestPinTemplate", "QuestdonObjectivePinTemplate", "QuestdonAreaPinTemplate" }
+local top = { t = -10, level = nil }
+function ns.TopWorldLevel()
+  local now = GetTime and GetTime() or 0
+  if now - top.t < 1 then return top.level end
+  top.t = now
+  local wm, hi = WorldMapFrame, nil
+  if wm and type(wm.EnumeratePinsByTemplate) == "function" then
+    for _, tpl in ipairs(TOP_TEMPLATES) do
+      pcall(function()
+        for pin in wm:EnumeratePinsByTemplate(tpl) do
+          local l = ns.Ask(pin, "GetFrameLevel")
+          if type(l) == "number" and (not hi or l > hi) then hi = l end
+        end
+      end)
+    end
+  end
+  top.level = hi and hi + 1 or nil
+  return top.level
+end
+function ns.ForgetTopLevel() top.t = -10 end -- (tests)
+
 -- level of a source's world map pins; one above the canvas if that is higher already
 function ns.WorldLevel(layer, canvasLevel)
   return math.max(ns.WORLD_BASE + (layer or 2), (canvasLevel or 0) + 1)

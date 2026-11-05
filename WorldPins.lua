@@ -205,9 +205,10 @@ function ns.DrawWorld(src, force)
   local scale = math.max(0.2, sc and sc.GetCanvasScale and ns.Num(ns.Call(sc.GetCanvasScale, sc)) or 1)
   local size, gsize, near = ns.Sizes(src, "world")
   local lv = ns.Num(ns.Ask(canvas, "GetFrameLevel"))
+  local topLv = src.opts.top and ns.TopWorldLevel() or nil
   -- (M3) the points' signature apart: a long list made a new long string every 0.1 s while the map was open
   -- (31.10.2026, D18) the view in numbers on src.view: no table and no string every 0.1 s
-  local v, vmap, vlv = src.view, map or 0, lv or -1
+  local v, vmap, vlv = src.view, map or 0, (lv or -1) + (topLv or 0) * 100000
   if not force and v.world and v.worldPts == src.sig and v.wmap == vmap and v.ww == w and v.wh == h and v.wsc == scale
       and v.wz == size and v.wg == gsize and v.wnear == near and v.wlv == vlv then
     return src.n.world
@@ -226,6 +227,7 @@ function ns.DrawWorld(src, force)
     end
     onMap = buf.n
     local level = ns.WorldLevel(ns.Layer(src), lv)
+    if topLv and topLv > level then level = topLv end
     local groups, ng = ns.Group(buf, near / scale)
     for gi = 1, ng do
       local g = groups[gi]

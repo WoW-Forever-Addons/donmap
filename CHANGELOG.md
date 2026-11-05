@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.1
+
+- **Pins above quest marks:** an addon can put its world map pins above Questdon's quest pins. Guildon uses it, so a guild member under a "!" can be hovered and clicked again.
+
 ## 1.3.0
 
 - **Square and shaped minimaps:** EllesmereUI's square or 4:3 cut minimap and the mixed shapes of other minimap addons (for example SexyMap) are recognised, so points, routes and pins show in the corners too.
