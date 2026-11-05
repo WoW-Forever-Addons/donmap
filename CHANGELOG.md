@@ -1,5 +1,10 @@
 # Changes
 
+## 1.3.3
+
+- **Works with OpenMap:** with OpenMap's stitched world map, the pins of other addons (Guildon's guild members) show above its map, also for members in a neighbouring zone.
+- **Pin labels keep their size** when you zoom the world map, like the pins themselves.
+
 ## 1.3.2
 
 - **Fixed on WoW Forever:** typing a /run line in the chat no longer shows "DonMap has been blocked from an action only available to the Blizzard UI".

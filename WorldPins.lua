@@ -138,8 +138,13 @@ local function PlainPin(src, parent, size)
   b:SetSize(size, size)
   b.icon = b:CreateTexture(nil, "ARTWORK")
   b.icon:SetAllPoints()
-  b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  b.label:SetPoint("TOP", b, "BOTTOM", 0, 2)
+  -- (05.11.2026, Daniel: "die Levelzahlen machen ganz wirre sachen") the text on a holder scaled by 1 / the canvas's scale,
+  -- so it stays the same size on the screen at every zoom like the pin (a font on the canvas grew with the zoom)
+  b.textHolder = CreateFrame("Frame", nil, b)
+  b.textHolder:SetSize(1, 1)
+  b.textHolder:SetPoint("TOP", b, "BOTTOM", 0, 2)
+  b.label = b.textHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  b.label:SetPoint("TOP", b.textHolder, "TOP", 0, 0)
   if b.RegisterForClicks then b:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
   b:SetScript("OnEnter", PlainTooltip)
   b:SetScript("OnLeave", function(self)
@@ -151,7 +156,18 @@ local function PlainPin(src, parent, size)
   return b
 end
 
-local function PlainPaint(b, points, size, gsize)
+-- keeps a pin's text holder at 1 / scale (scale: the canvas's, 1 on the minimap); the holder sits at the pin's bottom,
+-- its own offsets count in its scale
+function ns.ScaleText(holder, scale)
+  if not (holder and holder.SetScale) then return end
+  scale = tonumber(scale) or 1
+  if scale <= 0 then scale = 1 end
+  local want = 1 / scale
+  if holder._dmScale ~= want then holder._dmScale = want pcall(holder.SetScale, holder, want) end
+end
+
+local function PlainPaint(b, points, size, gsize, scale)
+  ns.ScaleText(b.textHolder, scale)
   local one = points[1]
   local n = #points
   b:SetSize(n == 1 and size or gsize, n == 1 and size or gsize)
@@ -168,9 +184,10 @@ function ns.NewPin(src, parent, size, where)
   return b
 end
 
-function ns.Paint(src, b, members, size, gsize, where)
+-- scale: the world map canvas's scale (nil = 1, the minimap); a source's own paint gets it as its sixth argument
+function ns.Paint(src, b, members, size, gsize, where, scale)
   b.points = members
-  if src.opts.paint then src.opts.paint(b, members, size, gsize, where) else PlainPaint(b, members, size, gsize) end
+  if src.opts.paint then src.opts.paint(b, members, size, gsize, where, scale or 1) else PlainPaint(b, members, size, gsize, scale) end
 end
 
 function ns.HideFrom(pins, n)
@@ -184,6 +201,35 @@ local function Canvas()
   local f = WorldMapFrame
   local sc = f and f.ScrollContainer
   return sc and sc.Child, sc
+end
+
+-- (05.11.2026, Daniel: "Guildon maps funktioniert nicht mit openmap", "es werden keine punkte auf der karte angezeigt")
+-- OpenMap stitches all zones onto the world map's canvas as its own frames, up to OpenMapAPI.ArtTopLevel(): our pins at
+-- the fixed 2010 + layer were under that art. While it stitches, pins go above its art, and a point is placed through
+-- OpenMap's stitched world, so it shows over the whole view (beyond the map underneath, which follows the view).
+local OM_SLACK = 1.5 -- how far past the map underneath (its widths) a point is still placed: the view shows that far
+local function OpenMapOn()
+  local api = rawget(_G, "OpenMapAPI")
+  if type(api) ~= "table" or type(api.IsStitched) ~= "function" then return nil end
+  local ok, on = pcall(api.IsStitched)
+  return ok and on and api or nil
+end
+ns.OpenMapOn = OpenMapOn
+
+local function OpenMapPos(api, mapID, x, y, shown)
+  if type(api.WorldFromMap) ~= "function" or type(api.MapFromWorld) ~= "function" then return nil end
+  local ok, u, v = pcall(api.WorldFromMap, mapID, x, y)
+  if not (ok and type(u) == "number" and type(v) == "number") then return nil end
+  local ok2, sx, sy = pcall(api.MapFromWorld, shown, u, v)
+  if not (ok2 and type(sx) == "number" and type(sy) == "number") then return nil end
+  if sx < -OM_SLACK or sx > 1 + OM_SLACK or sy < -OM_SLACK or sy > 1 + OM_SLACK then return nil end
+  return sx, sy
+end
+
+local function OpenMapTop(api)
+  if type(api.ArtTopLevel) ~= "function" then return nil end
+  local ok, top = pcall(api.ArtTopLevel)
+  return ok and type(top) == "number" and top or nil
 end
 
 -- whole screen pixels: the canvas is drawn at "scale", so a size or place of k / scale is k pixels on the screen
@@ -206,9 +252,12 @@ function ns.DrawWorld(src, force)
   local size, gsize, near = ns.Sizes(src, "world")
   local lv = ns.Num(ns.Ask(canvas, "GetFrameLevel"))
   local topLv = src.opts.top and ns.TopWorldLevel() or nil
+  local om = OpenMapOn()
+  local omTop = om and OpenMapTop(om) or nil
+  if omTop and (not topLv or topLv <= omTop) then topLv = omTop + 2 end
   -- (M3) the points' signature apart: a long list made a new long string every 0.1 s while the map was open
   -- (31.10.2026, D18) the view in numbers on src.view: no table and no string every 0.1 s
-  local v, vmap, vlv = src.view, map or 0, (lv or -1) + (topLv or 0) * 100000
+  local v, vmap, vlv = src.view, (map or 0) + (om and 0.5 or 0), (lv or -1) + (topLv or 0) * 100000
   if not force and v.world and v.worldPts == src.sig and v.wmap == vmap and v.ww == w and v.wh == h and v.wsc == scale
       and v.wz == size and v.wg == gsize and v.wnear == near and v.wlv == vlv then
     return src.n.world
@@ -221,7 +270,9 @@ function ns.DrawWorld(src, force)
     local buf = ns.Buffer(src, "world")
     for i, pt in ipairs(src.points) do
       if pt.world ~= false and (not pt.only or pt.mapID == map) then -- (M3) only: not on the maps above
-        local x, y = ns.PosOnMap(pt.mapID, pt.x, pt.y, map)
+        local x, y
+        if om then x, y = OpenMapPos(om, pt.mapID, pt.x, pt.y, map) end
+        if not x then x, y = ns.PosOnMap(pt.mapID, pt.x, pt.y, map) end
         if x then ns.AddItem(buf, pt, i, x * w, y * h) end
       end
     end
@@ -235,7 +286,7 @@ function ns.DrawWorld(src, force)
       local b = pins[n] or ns.NewPin(src, canvas, sizeW, "world")
       pins[n] = b
       if lv then ns.SetLevel(b, level) end
-      ns.Paint(src, b, g.members, sizeW, sizeG, "world")
+      ns.Paint(src, b, g.members, sizeW, sizeG, "world", scale)
       b:ClearAllPoints()
       b:SetPoint("CENTER", canvas, "TOPLEFT", Px(g.x, scale), -Px(g.y, scale))
       b:Show()
@@ -245,6 +296,7 @@ function ns.DrawWorld(src, force)
   src.n.world = n
   local info = src.info.world or {}
   info.map, info.w, info.h, info.scale, info.have, info.onMap, info.pins, info.canvasLevel = map, w, h, scale, #src.points, onMap, n, lv
+  info.openMap, info.openMapTop = om and true or nil, omTop
   src.info.world = info
   return n
 end
