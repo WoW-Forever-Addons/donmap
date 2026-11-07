@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.4
+
+- **Your own arrow above the pins:** an addon can ask DonMap to draw a copy of the player's arrow above its minimap pins while one of them covers it (Guildon 0.12.0 uses it).
+
 ## 1.3.3
 
 - **Works with OpenMap:** with OpenMap's stitched world map, the pins of other addons (Guildon's guild members) show above its map, also for members in a neighbouring zone.

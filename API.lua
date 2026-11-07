@@ -217,6 +217,12 @@ API.GameRedrawPending = function() return ns.gameMarks.redraw and true or false 
 API.version = 5
 API.SetArrowCompass = function(id, on) return ns.SetArrowCompass(id, on) end
 
+---------------------------------------------------------------------------
+-- Version 6 (07.11.2026): opts.playerOnTop = true | function() -> boolean: while a minimap pin of the source covers
+-- the middle, a copy of the player's arrow is drawn above it (MiniPins.lua ns.PlayerOnTop)
+---------------------------------------------------------------------------
+API.version = 6
+
 DonMapAPI = API
 ns.API = API
 
@@ -239,4 +245,5 @@ driver:SetScript("OnUpdate", function(_, dt)
       ns.Safe(src.id .. " minimap", ns.DrawMini, src)
     end
   end
+  ns.Safe("player arrow", ns.PlayerOnTop) -- (07.11.2026) the player's arrow above the pins (MiniPins.lua)
 end)

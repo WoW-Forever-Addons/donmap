@@ -1,4 +1,4 @@
-local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 19)
+local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 20)
 
 ---------------------------------------------------------------------------
 -- DonCore module "Kit" (minor 1, 01.11.2026, STYLEKIT_PLAN.md "Schritt 2"; minor 2, 02.11.2026: Kit.IconButton, the symbols from
@@ -39,6 +39,8 @@ local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 19)
 -- (minor 16, 04.11.2026, Era-Test, Daniel: "die zahlen sind sehr eng an dem / geschrieben besonders die 1") Kit.Fraction(a, b):
 -- "a / b" with a space on each side of the slash (Ring, ListRow progress); a Kit.Dialog always shows at Kit.scale times
 -- its own factor (d:SetOwnScale), a SetScale from outside before Show no longer stacks on top (Luredon's 1.5)
+-- (minor 20, 05.11.2026, Daniel on Golddon's sell row: "felder für g / s / c nicht alles in einem") Kit.CoinBox: money in
+-- three number boxes with the coin symbols, the same calls as Kit.MoneyBox
 -- (minor 7, 02.11.2026, Daniel: the coming steps "gerne kleiner, das wirkt fast so als könnte man es auswählen": ListRow
 -- item.compact, a quiet small row: title in the sub font, its second line smaller, title colour body; give the item h = 28)
 -- (minor 6, 02.11.2026, Daniel after Leveldon in the game: "der kreis mit % sollte durchgängig sein", "die ? ! und schwerter in der
@@ -61,7 +63,7 @@ local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 19)
 ---------------------------------------------------------------------------
 if not Kit then return end -- the same or a newer Kit is loaded already
 local Core = LibStub("DonCore-1.0")
-Kit.VERSION = 19
+Kit.VERSION = 20
 
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local floor, ceil, max, min, abs, pi, sin, cos = math.floor, math.ceil, math.max, math.min, math.abs, math.pi, math.sin, math.cos
@@ -4057,6 +4059,67 @@ function Kit.MoneyBox(parent, opts)
     local c = Kit.ParseMoney(self:GetText())
     if c then self:SetValue(c) end
   end)
+  return m
+end
+
+-- (minor 20, 05.11.2026, Daniel: "felder für g / s / c nicht alles in einem") CoinBox: money in three number boxes, gold,
+-- silver, copper, each with its coin symbol; silver and copper at most 99. The same calls as MoneyBox: m:GetValue() copper
+-- (nil when all three are empty), m:SetValue(copper), m:GetText() ("1g 2s 3c", for Kit.ParseMoney), m:SetNext(other),
+-- m:SetFocus(), m:Layout(w) (gold takes what silver and copper leave); opts.onChange(copper, m), opts.onEnter(copper, m)
+function Kit.CoinBox(parent, opts)
+  opts = opts or {}
+  local m = CreateFrame("Frame", nil, parent)
+  m:SetHeight(S.button)
+  m.boxes, m.coins = {}, {}
+  local function changed() Safe("coins", opts.onChange, m:GetValue(), m) end
+  local function enter() Safe("coins enter", opts.onEnter, m:GetValue(), m) end
+  for i = 1, 3 do
+    local b = Kit.EditBox(m, { numeric = true, maxLetters = i == 1 and 7 or 2, min = 0, max = i > 1 and 99 or nil,
+      onChange = changed, onEnter = enter })
+    m.boxes[i] = b
+    m.coins[i] = m:CreateTexture(nil, "ARTWORK")
+    m.coins[i]:SetTexture(Kit.COINS[i])
+    m.coins[i]:SetSize(12, 12)
+  end
+  m.boxes[1]:SetNext(m.boxes[2]) m.boxes[2]:SetNext(m.boxes[3])
+  function m:GetValue()
+    local any, total = false, 0
+    for i, b in ipairs(self.boxes) do
+      local n = tonumber(b:GetText() or "")
+      if n then any = true total = total + n * (i == 1 and 10000 or i == 2 and 100 or 1) end
+    end
+    return any and total or nil
+  end
+  function m:GetText()
+    local c = self:GetValue()
+    return c and ("%dg %ds %dc"):format(floor(c / 10000), floor(c / 100) % 100, c % 100) or ""
+  end
+  function m:SetValue(c)
+    c = tonumber(c)
+    if not c then for _, b in ipairs(self.boxes) do b:SetValue("") end return end
+    c = floor(c + 0.5)
+    self.boxes[1]:SetValue(floor(c / 10000)) self.boxes[2]:SetValue(floor(c / 100) % 100) self.boxes[3]:SetValue(c % 100)
+  end
+  function m:SetText(t) self:SetValue(Kit.ParseMoney(t)) end
+  function m:SetNext(other) self.boxes[3]:SetNext(other) end
+  function m:SetFocus() self.boxes[1]:SetFocus() end
+  function m:ClearFocus() for _, b in ipairs(self.boxes) do b:ClearFocus() end end
+  function m:Layout(w)
+    w = tonumber(w) or 140
+    self._w = w
+    self:SetWidth(w)
+    local coin, gap, small = 12, 2, 26
+    local gold = max(24, w - 2 * small - 3 * (coin + gap) - 2 * S.gap)
+    local x = 0
+    for i, b in ipairs(self.boxes) do
+      local bw = i == 1 and gold or small
+      b:ClearAllPoints() b:SetPoint("LEFT", self, "LEFT", x, 0) b:Layout(bw)
+      self.coins[i]:ClearAllPoints() self.coins[i]:SetPoint("LEFT", self, "LEFT", x + bw + gap, 0)
+      x = x + bw + gap + coin + S.gap
+    end
+  end
+  m:Layout(opts.width or 140)
+  if opts.value ~= nil then m:SetValue(opts.value) end
   return m
 end
 

@@ -347,3 +347,77 @@ function ns.DrawMiniSticky(src, force)
   src.info.minimap = info
   return n, true
 end
+
+---------------------------------------------------------------------------
+-- (07.11.2026, a Guildon player on Discord: his own arrow on the minimap should stay an arrow; making the pins
+-- see-through also fades the guild members) The game draws the player's arrow inside the minimap, below every pin. A
+-- source with opts.playerOnTop (boolean or function) gets a copy of that arrow above its pins while one of them covers
+-- the middle. Turned as the game's: by GetPlayerFacing, upright while the minimap rotates. No facing (instances): none.
+---------------------------------------------------------------------------
+ns.TOP_ARROW = 32 -- the game's arrow (Interface\Minimap\MinimapArrow) in minimap pixels
+local topArrow
+
+local function TopArrow(mm)
+  if topArrow then return topArrow end
+  local f = CreateFrame("Frame", nil, mm)
+  f:SetSize(ns.TOP_ARROW, ns.TOP_ARROW)
+  f:SetPoint("CENTER", mm, "CENTER", 0, 0)
+  local t = f:CreateTexture(nil, "OVERLAY")
+  t:SetTexture("Interface\\Minimap\\MinimapArrow")
+  t:SetSize(ns.TOP_ARROW, ns.TOP_ARROW)
+  t:SetPoint("CENTER", f, "CENTER", 0, 0)
+  f.tex = t
+  if f.EnableMouse then f:EnableMouse(false) end
+  f:Hide()
+  topArrow = f
+  return f
+end
+
+local function Wants(src)
+  local v = src.opts.playerOnTop
+  if type(v) == "function" then
+    local ok, r = pcall(v)
+    return ok and r and true or false
+  end
+  return v and true or false
+end
+
+-- does a shown pin lie on the middle of the minimap? (its centre closer than half its size plus the arrow's tip)
+local function Covers(b)
+  local ok, _, _, _, x, y = pcall(b.GetPoint, b, 1)
+  if not ok then return false end
+  x, y = ns.Num(x), ns.Num(y)
+  if not (x and y) then return false end
+  local r = (ns.Num(ns.Ask(b, "GetWidth")) or 0) / 2 + ns.TOP_ARROW * 0.3
+  return x * x + y * y <= r * r
+end
+
+-- after every draw (API.lua's clock): show, turn and lift the copy, or hide it; returns whether it is shown
+function ns.PlayerOnTop()
+  local mm = Minimap
+  local hi, cover
+  if mm and not (mm.IsVisible and not mm:IsVisible()) then
+    for _, src in ipairs(ns.order or {}) do
+      if (src.n.minimap or 0) > 0 and Wants(src) then
+        for _, b in ipairs(src.pins.minimap) do
+          if b:IsShown() then
+            local lv = ns.Num(ns.Ask(b, "GetFrameLevel"))
+            if lv and (not hi or lv > hi) then hi = lv end
+            if not cover and Covers(b) then cover = true end
+          end
+        end
+      end
+    end
+  end
+  local facing = cover and ns.Num(ns.Call(GetPlayerFacing))
+  if not facing then
+    if topArrow then topArrow:Hide() end
+    return false
+  end
+  local f = TopArrow(mm)
+  ns.SetLevel(f, (hi or ns.Num(ns.Ask(mm, "GetFrameLevel")) or 0) + 3) -- above the pin and its icon and number
+  if f.tex.SetRotation then pcall(f.tex.SetRotation, f.tex, ns.MinimapRotating() and 0 or facing) end
+  f:Show()
+  return true
+end
+function ns.TopArrowFrame() return topArrow end -- (tests)
