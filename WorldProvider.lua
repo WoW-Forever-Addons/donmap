@@ -163,9 +163,9 @@ combatFrame:SetScript("OnEvent", function() ns.Safe("world map before combat", P
 ---------------------------------------------------------------------------
 -- The game's quest markers on the world map, taken away for a source that draws its own (from Questdon MapPins.lua,
 -- option hideGamePOIs 17. and 18.10.2026). No hook on the game's code: after the source's refresh, after the quest events
--- the game redraws them on, and while the map is open (a small frame looks every 0.03 s and clears a marker as soon as
--- it shows, so they do not flash), the game's two quest providers are asked to remove their pins. The quest areas
--- (one pin the provider keeps for good) are only hidden. Of the round markers those the source wants are kept
+-- the game redraws them on, and while the map is open (a small frame looks every frame and hides a marker as soon as
+-- it shows, so they do not flash), the game's quest markers and quest areas are hidden (10.11.2026: only hidden,
+-- never removed, see ClearGameQuestMarks). Of the round markers those the source wants are kept
 -- (opts.keep(pin): true keep, false remove, nil cannot be told; then all go and opts.keeps(false) says so).
 --
 --   DonMapAPI.HideGameQuestMarks("questdon", { on = function() -> bool, keep = function(pin) -> bool|nil,
@@ -228,56 +228,51 @@ local function SetKeeps(v)
   if f then pcall(f, v) end
 end
 
+-- (10.11.2026, Daniel: "wieso denn nicht immer auf hide, wenn man das ausgewählt hat") The game's markers are only
+-- hidden (pin:Hide()), never removed: no call into the game's providers or pin pools, so nothing of the game is
+-- changed by us (no taint), and it works in combat too (before, the markers stood on the map during a fight and went
+-- after it). The game shows a marker again whenever it draws; the watch below hides it in the same frame.
 function ns.ClearGameQuestMarks()
-  if not MarksOn() or InCombatLockdown() then return 0 end
+  if not MarksOn() then return 0 end
   local st = marks.stats
-  local n = 0
-  local blobMixin = rawget(_G, "QuestBlobDataProviderMixin")
-  for _, dp in ipairs(ns.GameQuestProviders()) do
-    -- the quest provider keeps its ? pins (taken one by one below), unless they cannot be told apart
-    local isBlob = type(blobMixin) == "table" and blobMixin.RefreshAllData and dp.RefreshAllData == blobMixin.RefreshAllData
-    if (isBlob or Keeps() == false) and dp.RemoveAllData and pcall(dp.RemoveAllData, dp) then n = n + 1 end
-  end
-  st.providers, st.templates, st.runs = n, 0, st.runs + 1
+  st.providers, st.templates, st.runs = 0, 0, st.runs + 1
   local map = WorldMapFrame
-  if map and type(map.pinPools) == "table" and map.RemoveAllPinsByTemplate then
-    for t in pairs(map.pinPools) do
-      if ns.IsGameQuestTemplate(t) then
-        if t:find("QuestBlob") then
-          -- the quest area is one pin its provider keeps for good: given back to the pool it never came again
-          if map.EnumeratePinsByTemplate then
-            local ok = pcall(function() for pin in map:EnumeratePinsByTemplate(t) do pin:Hide() marks.hidden[pin] = true end end)
-            if ok then st.templates = st.templates + 1 end
+  if not (map and type(map.pinPools) == "table" and map.EnumeratePinsByTemplate) then return 0 end
+  for t in pairs(map.pinPools) do
+    if ns.IsGameQuestTemplate(t) then
+      local blob = t:find("QuestBlob") ~= nil
+      local drop, unknown, seen = nil, false, 0
+      local ok = pcall(function()
+        for pin in map:EnumeratePinsByTemplate(t) do
+          seen = seen + 1
+          local keep = false
+          if not blob and Keeps() ~= false then
+            keep = Keep(pin)
+            if keep == nil then unknown = true end
           end
-        else
-          local done = false
-          if Keeps() ~= false and map.EnumeratePinsByTemplate and map.RemovePin then
-            local drop, unknown, seen = nil, false, 0
-            local ok = pcall(function()
-              for pin in map:EnumeratePinsByTemplate(t) do
-                seen = seen + 1
-                local keep = Keep(pin)
-                if keep == nil then unknown = true end
-                if not keep then drop = drop or {} drop[#drop + 1] = pin end
-              end
-            end)
-            if ok and not unknown then
-              local all = true
-              for _, pin in ipairs(drop or {}) do if not pcall(map.RemovePin, map, pin) then all = false end end
-              if all then done = true if seen > 0 then SetKeeps(true) end end -- (true only once pins were seen that carry their quest)
-            end
-          end
-          if not done then
-            SetKeeps(false) -- the pins cannot be told apart: all go, the source draws its own
-            if pcall(map.RemoveAllPinsByTemplate, map, t) then st.templates = st.templates + 1 end
-          else
-            st.templates = st.templates + 1
+          if not keep then drop = drop or {} drop[#drop + 1] = pin end
+        end
+      end)
+      if ok then
+        if not blob then
+          -- the round markers: those the source wants stay; if they cannot be told apart all go and the source
+          -- draws its own (true only once pins were seen that carry their quest)
+          if unknown then
+            SetKeeps(false)
+            drop = {}
+            pcall(function() for pin in map:EnumeratePinsByTemplate(t) do drop[#drop + 1] = pin end end)
+          elseif seen > 0 and Keeps() ~= false then
+            SetKeeps(true)
           end
         end
+        for _, pin in ipairs(drop or {}) do
+          if type(pin) == "table" and pin.Hide and pcall(pin.Hide, pin) then marks.hidden[pin] = t end
+        end
+        st.templates = st.templates + 1
       end
     end
   end
-  return n + st.templates
+  return st.templates
 end
 
 local function After(delay, fn)
@@ -295,7 +290,15 @@ end
 -- once more the next time the source's map is drawn (the map may be closed while the option changes)
 local function RedrawGame()
   local map = WorldMapFrame
-  for pin in pairs(marks.hidden) do pcall(pin.Show, pin) marks.hidden[pin] = nil end
+  -- only a pin still in use is shown again (one given back to its pool meanwhile would be a stale marker); the
+  -- providers draw theirs anew right below
+  local pools = map and type(map.pinPools) == "table" and map.pinPools or {}
+  for pin, t in pairs(marks.hidden) do
+    local pool = pools[t]
+    local active = type(pool) == "table" and type(pool.activeObjects) == "table" and pool.activeObjects
+    if not active or active[pin] then pcall(pin.Show, pin) end
+    marks.hidden[pin] = nil
+  end
   for _, dp in ipairs(ns.GameQuestProviders()) do if dp.RefreshAllData then pcall(dp.RefreshAllData, dp) end end
   if map and map.RefreshAllDataProviders then pcall(map.RefreshAllDataProviders, map) end
 end
@@ -319,9 +322,9 @@ function ns.GameMarkShown(map)
     if ns.IsGameQuestTemplate(t) and type(pool) == "table" and type(pool.activeObjects) == "table" then
       local blob = t:find("QuestBlob") ~= nil
       for pin in pairs(pool.activeObjects) do
-        if not blob then
-          if Keeps() == false or Keep(pin) ~= true then return true end
-        elseif type(pin) == "table" and pin.IsShown and pin:IsShown() then return true end
+        if type(pin) == "table" and pin.IsShown and pin:IsShown() and (blob or Keeps() == false or Keep(pin) ~= true) then
+          return true
+        end
       end
     end
   end
@@ -336,15 +339,15 @@ end
 
 local function WatchCheck(map) if ns.GameMarkShown(map) then ns.ClearGameQuestMarks() end end
 local watch = CreateFrame("Frame")
-local watchElapsed = 0
 watch:SetScript("OnUpdate", function(_, dt)
   if not marks.opts then return end
-  watchElapsed = watchElapsed + (tonumber(dt) or 0)
-  if watchElapsed < 0.15 then return end -- (31.10.2026, D19) was 0.03; the events below clear at once
-  watchElapsed = 0
+  -- (10.11.2026, Daniel: "die blizzard marker blitzen immer kurz auf, wenn man steht") every frame while the map is
+  -- open: the game draws its markers anew in an event, this runs before that frame is shown, so they never show.
+  -- (31.10., D19 looked every 0.15 s and the events below cleared 0.05 s later: both a few frames late.) Closed map:
+  -- nothing but the Shown check; the look itself only reads the map's pools.
   local map = WorldMapFrame
-  if not Shown(map) or InCombatLockdown() or not MarksOn() then return end
-  ns.Safe("game markers watch", WatchCheck, map) -- no closure every 0.03 s
+  if not Shown(map) or not MarksOn() then return end -- in combat too: hiding is allowed there
+  ns.Safe("game markers watch", WatchCheck, map) -- no closure per frame
 end)
 local markEvents = CreateFrame("Frame")
 -- (Era has no SUPER_TRACKING_CHANGED: an unknown event is an error there)

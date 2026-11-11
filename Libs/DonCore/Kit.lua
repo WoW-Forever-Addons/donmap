@@ -1,4 +1,4 @@
-local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 20)
+local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 21)
 
 ---------------------------------------------------------------------------
 -- DonCore module "Kit" (minor 1, 01.11.2026, STYLEKIT_PLAN.md "Schritt 2"; minor 2, 02.11.2026: Kit.IconButton, the symbols from
@@ -39,6 +39,10 @@ local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 20)
 -- (minor 16, 04.11.2026, Era-Test, Daniel: "die zahlen sind sehr eng an dem / geschrieben besonders die 1") Kit.Fraction(a, b):
 -- "a / b" with a space on each side of the slash (Ring, ListRow progress); a Kit.Dialog always shows at Kit.scale times
 -- its own factor (d:SetOwnScale), a SetScale from outside before Show no longer stacks on top (Luredon's 1.5)
+-- (minor 21, 08.11.2026, Profitdon's shopping list, Daniel: "fehlt weiterhin das X für löschen am besten am hauptitem links
+-- daneben", "bei der anzahl unter kaufen wollte ich ein beschreibbares feld") ItemRow: item.onRemove's X stands left of the
+-- symbol (the 07.11. X came without a new minor, so an older Kit 20 of another addon won and showed none); item.edit =
+-- { key, value, onCommit(item, n), tip }: a number box in place of that column's text, committed on Enter or on leaving
 -- (minor 20, 05.11.2026, Daniel on Golddon's sell row: "felder für g / s / c nicht alles in einem") Kit.CoinBox: money in
 -- three number boxes with the coin symbols, the same calls as Kit.MoneyBox
 -- (minor 7, 02.11.2026, Daniel: the coming steps "gerne kleiner, das wirkt fast so als könnte man es auswählen": ListRow
@@ -63,7 +67,7 @@ local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 20)
 ---------------------------------------------------------------------------
 if not Kit then return end -- the same or a newer Kit is loaded already
 local Core = LibStub("DonCore-1.0")
-Kit.VERSION = 20
+Kit.VERSION = 21
 
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local floor, ceil, max, min, abs, pi, sin, cos = math.floor, math.ceil, math.max, math.min, math.abs, math.pi, math.sin, math.cos
@@ -3173,7 +3177,8 @@ end
 
 ---------------------------------------------------------------------------
 -- EditBox 28 high in the Don style for text and numbers: opts.placeholder, opts.numeric (whole numbers, opts.min/max
--- clamp on leaving), opts.maxLetters, opts.onChange(text, box) on typing, opts.onEnter(box), opts.clear (a small x),
+-- clamp on leaving), opts.maxLetters, opts.onChange(text, box) on typing, opts.onEnter(box), (minor 21) opts.onLeave(box)
+-- when it loses the focus, opts.clear (a small x),
 -- Tab goes to box.nextBox (box:SetNext(other)). e:GetValue() (a number when numeric), e:SetValue(v), e:Layout(w)
 ---------------------------------------------------------------------------
 function Kit.EditBox(parent, opts)
@@ -3241,6 +3246,7 @@ function Kit.EditBox(parent, opts)
       local n = self:GetValue()
       if n and tostring(n) ~= self:GetText() then self:SetText(tostring(n)) Safe("edit", opts.onChange, tostring(n), self) end
     end
+    if opts.onLeave then Safe("edit leave", opts.onLeave, self) end
     Refresh(self)
   end)
   function e:Layout(w) self._w = w self:SetWidth(w) Kit.Fit(self.hint, max(1, w - 16 - (self.clear and 16 or 0))) end
@@ -3804,6 +3810,35 @@ function Kit.ItemRow(parent)
     self._tipFn = it.tooltipFn or (not self._tip and it.itemID and Kit.ItemTipFn) or nil
     self._dim = (it.done or it.unusable) and true or nil
     self._active = it.active and true or nil
+    -- (07.11.2026, Profitdon: "oben ein X für das löschen") item.onRemove(item): a small X, (minor 21) left of the symbol,
+    -- item.removeTip its tooltip
+    if it.onRemove then
+      if not self.x then
+        self.x = Kit.IconButton(self, "close", { size = S.buttonSmall - 4, onClick = function()
+          local cur = self.item
+          if cur and cur.onRemove then Safe("row remove", cur.onRemove, cur) end
+        end })
+      end
+      if self.x.SetTooltip then self.x:SetTooltip(it.removeTip or "") end
+      Call(self.x, "SetFrameLevel", (self:GetFrameLevel() or 1) + 3)
+      self.x:Show()
+    elseif self.x then self.x:Hide() end
+    -- (minor 21) item.edit = { key, value, onCommit(item, n), tip }: a number box in the column key
+    if it.edit then
+      if not self.edit then
+        local function Commit(box)
+          local cur = self.item
+          local ed = cur and cur.edit
+          local n = box:GetValue()
+          if ed and n and n ~= ed.value and ed.onCommit then ed.value = n Safe("row edit", ed.onCommit, cur, n) end
+        end
+        self.edit = Kit.EditBox(self, { numeric = true, min = 1, width = 56, onEnter = Commit, onLeave = Commit })
+      end
+      self.edit:SetValue(it.edit.value)
+      if self.edit.SetTooltip and it.edit.tip then self.edit:SetTooltip(it.edit.tip) end
+      Call(self.edit, "SetFrameLevel", (self:GetFrameLevel() or 1) + 3)
+      self.edit:Show()
+    elseif self.edit then self.edit:Hide() end
     self:Layout(self._w or self:GetWidth())
     Refresh(self)
   end
@@ -3815,6 +3850,11 @@ function Kit.ItemRow(parent)
     local cols = (self.tlist and self.tlist.columns) or {}
     local vis = VisibleCols(cols, w)
     local x = S.markBar + 8 + (tonumber(it.indent) or 0)
+    if self.x and it.onRemove then
+      self.x:ClearAllPoints()
+      self.x:SetPoint("LEFT", x - 2, 0)
+      x = x + (S.buttonSmall - 4) + S.gap - 2
+    end
     self.iconBox:ClearAllPoints()
     self.iconBox:SetPoint("LEFT", x, 0)
     if self.iconBox:IsShown() then x = x + S.iconMid + S.gap end
@@ -3825,7 +3865,14 @@ function Kit.ItemRow(parent)
     for i = #vis, 1, -1 do
       local c = vis[i]
       local fs = self:Cell(i)
-      fs:SetText(cells[c.key] ~= nil and tostring(cells[c.key]) or "")
+      local edit = it.edit and it.edit.key == c.key and self.edit
+      fs:SetText((cells[c.key] ~= nil and not edit) and tostring(cells[c.key]) or "")
+      if edit then
+        edit:ClearAllPoints()
+        edit:SetPoint("RIGHT", -rx, 0)
+        edit:SetHeight(S.button - 4)
+        edit:Layout(max(36, min(64, (c.width or 80) - S.gap)))
+      end
       TextColor(fs, (it.cellColors and it.cellColors[c.key]) or C.body)
       fs:SetJustifyH(c.align or "RIGHT")
       fs:ClearAllPoints()

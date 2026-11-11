@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.5
+
+- **The game's markers on the world map stay hidden:** when an addon asks DonMap to hide them (Questdon's option), they no longer flash up for a moment and stay hidden in combat. DonMap only hides them and no longer touches the game's own map code.
+
 ## 1.3.4
 
 - **Your own arrow above the pins:** an addon can ask DonMap to draw a copy of the player's arrow above its minimap pins while one of them covers it (Guildon 0.12.0 uses it).

@@ -1,4 +1,4 @@
-local Style = LibStub("DonCore-1.0"):NewModule("Style", 13)
+local Style = LibStub("DonCore-1.0"):NewModule("Style", 14)
 
 ---------------------------------------------------------------------------
 -- Style kit, DonCore module "Style" (minor 5; Style.VERSION = 3 is the kit's own version), see DESIGN.md.
@@ -21,6 +21,8 @@ local Style = LibStub("DonCore-1.0"):NewModule("Style", 13)
 -- 16 px, the title moves right; before it was hidden in Don rows.
 -- (minor 12, 03.11.2026) panel:SetPlainVeil, a veil behind plain panels; gone again in minor 13 (Daniel: "muss weg, es muss
 -- ohne lesbar sein"). (minor 13) a fitted text that gets the plain outline stays inside the room it was fitted to.
+-- (minor 14, 11.11.2026, CurseForge t0tal) a dragged panel is saved hanging at its top edge, so a list that changes its
+-- height grows downwards, not around the screen point the game picked; older saved places are moved up once.
 ---------------------------------------------------------------------------
 if not Style then return end -- the same or a newer Style is loaded already
 
@@ -1118,6 +1120,7 @@ function Style.Relayout(panel)
       RestoreCollapsed(panel)
       panel._body:Hide()
       panel:SetHeight(panel._headerH or S.header)
+      if Style.PanelTop then Style.PanelTop(panel) end
       panel._contentHeight = 0
       FinishHover(panel)
       return true
@@ -1191,6 +1194,7 @@ function Style.Relayout(panel)
   panel._contentHeight = y
   panel._body:SetHeight(y)
   panel:SetHeight((panel._headerH or S.header) + y)
+  if Style.PanelTop then Style.PanelTop(panel) end
   FinishHover(panel)
   if panel._chromeHidden then Style.PlainText(panel, true) end
   if allOk then
@@ -1849,12 +1853,41 @@ local function ApplyPosition(p)
   p:SetPoint(d[1], UIParent, d[2] or d[1], d[3] or 0, d[4] or 0)
 end
 
+-- (minor 14, 11.11.2026, CurseForge t0tal: "the list expands from the center rather than from the top down") After a
+-- drag the game anchors a frame at the screen point nearest to it (LEFT, CENTER, BOTTOM...), and a panel whose height
+-- changes then grows around that point. A panel always hangs at its top: the same place, the point moved up to the
+-- top edge (LEFT -> TOPLEFT, CENTER -> TOP, BOTTOMRIGHT -> TOPRIGHT), the screen point it hangs at stays.
+local function TopPoint(p, point, y)
+  if type(point) ~= "string" or point:find("^TOP") then return point, y end
+  local _, h = Call(p, "GetHeight")
+  h = tonumber(h)
+  if not h or h <= 0 then return point, y end
+  local side = point:find("LEFT") and "LEFT" or point:find("RIGHT") and "RIGHT" or ""
+  return "TOP" .. side, y + (point:find("^BOTTOM") and h or h / 2)
+end
+
 local function SavePosition(p)
   local ok, point, _, relPoint, x, y = Call(p, "GetPoint", 1)
   if not ok or not point then return end
-  x, y = floor((tonumber(x) or 0) + 0.5), floor((tonumber(y) or 0) + 0.5)
+  relPoint = relPoint or point
+  local top, ty = TopPoint(p, point, tonumber(y) or 0)
+  x, y = floor((tonumber(x) or 0) + 0.5), floor((tonumber(ty) or 0) + 0.5)
+  if top ~= point then
+    p:ClearAllPoints()
+    if not pcall(p.SetPoint, p, top, UIParent, relPoint, x, y) then return end
+  end
   Call(p, "SetUserPlaced", false)
-  Put(p, "pos", { point, relPoint or point, x, y })
+  Put(p, "pos", { top, relPoint, x, y })
+end
+
+-- A place saved before minor 14 with a point below the top: moved up once, after the panel has its height (so it stays
+-- where the player sees it). Only a panel that stands at its saved place (not one docked to another frame, not mid-drag).
+function Style.PanelTop(p)
+  if type(p) ~= "table" or not p._opts or p._moving then return end
+  local pos = Get(p, "pos")
+  if type(pos) ~= "table" or type(pos[1]) ~= "string" or pos[1]:find("^TOP") then return end
+  local ok, point = Call(p, "GetPoint", 1)
+  if ok and point == pos[1] then SavePosition(p) end
 end
 
 function PanelMethods:SetTitle(text)
