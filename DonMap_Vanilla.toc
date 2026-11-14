@@ -3,7 +3,7 @@
 ## Notes: Map layer of the Don addons on WoW Classic Era: pins on the world map and points on the minimap for Guildon and the other Don addons, the direction arrow and the compass for Questdon and Leveldon, grouped and kept below Questie and GatherMate. Shows nothing by itself; loads with the addons that need it.
 ## Notes-deDE: Kartenebene der Don-Addons für WoW Classic Era: Pins auf der Weltkarte und Punkte auf der Minikarte für Guildon und die anderen Don-Addons, Richtungspfeil und Kompass für Questdon und Leveldon, gebündelt und unter Questie und GatherMate. Zeigt selbst nichts und lädt mit den Addons, die es brauchen.
 ## Author: DonCoohd
-## Version: 1.3.5
+## Version: 1.3.6
 ## X-Curse-Project-ID: 1774431
 ## Category: Map & Minimap
 ## Category-deDE: Karte und Minikarte

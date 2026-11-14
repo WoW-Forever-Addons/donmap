@@ -1,4 +1,4 @@
-local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 21)
+local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 25)
 
 ---------------------------------------------------------------------------
 -- DonCore module "Kit" (minor 1, 01.11.2026, STYLEKIT_PLAN.md "Schritt 2"; minor 2, 02.11.2026: Kit.IconButton, the symbols from
@@ -39,6 +39,18 @@ local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 21)
 -- (minor 16, 04.11.2026, Era-Test, Daniel: "die zahlen sind sehr eng an dem / geschrieben besonders die 1") Kit.Fraction(a, b):
 -- "a / b" with a space on each side of the slash (Ring, ListRow progress); a Kit.Dialog always shows at Kit.scale times
 -- its own factor (d:SetOwnScale), a SetScale from outside before Show no longer stacks on top (Luredon's 1.5)
+-- (minor 25, 12.11.2026, Questdon's item buttons in the quest list, Daniel: "Gleiches kommt aus DonCore") Kit.ItemButton:
+-- a protected button that uses an item (icon, count, cooldown, a watch while a change waits for the end of a fight)
+-- (minor 24, 11.11.2026, Profitdon's Auswertung, Daniel's picture 122142: two lines without a name, one peak of 196g
+-- pressed five days of the curve flat) LineChart: opts.legend (the labels of the series in their colours, top left) and
+-- opts.clipPeak = factor (a peak more than factor times the 90 % value is cut at the top edge, c.clipped holds its real
+-- value, opts.clipText(value) adds a note to the legend); the mouse still shows the real values
+-- (minor 23, 11.11.2026, Profitdon's Durchsicht, Daniel: "Gleiches gehört ins Kit, nicht je Addon") three blocks Profitdon
+-- had built for itself: ActionBar a:Input(opts) (a number box left of the buttons), Kit.PlaceRight (a row of controls
+-- from the right edge, hidden ones take no room), Kit.SecureButton (a protected action button in the Don look)
+-- (minor 22, 11.11.2026, Finddon, Daniel: map pin "rund im Goldring wie die Minimap-Knöpfe", footer "Pfeil: Name" to click)
+-- Kit.RoundIcon(parent, size, opts): a round symbol on a dark disc in the gold ring of the minimap buttons;
+-- Window: f:SetStatus(text, onClick, tooltip) makes the footer text take a click
 -- (minor 21, 08.11.2026, Profitdon's shopping list, Daniel: "fehlt weiterhin das X für löschen am besten am hauptitem links
 -- daneben", "bei der anzahl unter kaufen wollte ich ein beschreibbares feld") ItemRow: item.onRemove's X stands left of the
 -- symbol (the 07.11. X came without a new minor, so an older Kit 20 of another addon won and showed none); item.edit =
@@ -67,7 +79,7 @@ local Kit = LibStub("DonCore-1.0"):NewModule("Kit", 21)
 ---------------------------------------------------------------------------
 if not Kit then return end -- the same or a newer Kit is loaded already
 local Core = LibStub("DonCore-1.0")
-Kit.VERSION = 21
+Kit.VERSION = 25
 
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local floor, ceil, max, min, abs, pi, sin, cos = math.floor, math.ceil, math.max, math.min, math.abs, math.pi, math.sin, math.cos
@@ -637,6 +649,65 @@ function Kit.ProgressBar(parent, color)
     self.fill:Show()
   end
   function f:Layout(w) self._w = w self:SetWidth(w) self:SetValue(self.value) end
+  return f
+end
+
+-- (minor 22) round symbol in the gold ring of the game's minimap buttons (a dark disc, the symbol cut round, Blizzard's
+-- tracking border on top; measures of a 31 px button scaled to size). opts.ring = false: the symbol alone.
+-- f:SetIcon(file, coords): an icon of Interface\Icons loses its dark border, any other picture is shown whole.
+-- f:SetRing(on), f:SetRoundSize(size)
+function Kit.RoundIcon(parent, size, opts)
+  opts = opts or {}
+  local f = CreateFrame("Frame", nil, parent)
+  f.disc = f:CreateTexture(nil, "BACKGROUND")
+  f.disc:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+  f.icon = f:CreateTexture(nil, "ARTWORK")
+  f.ring = f:CreateTexture(nil, "OVERLAY")
+  f.ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+  if f.CreateMaskTexture then
+    local ok, mask = pcall(f.CreateMaskTexture, f)
+    if ok and mask then
+      pcall(mask.SetTexture, mask, "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+      mask:SetAllPoints(f.icon)
+      if f.icon.AddMaskTexture then pcall(f.icon.AddMaskTexture, f.icon, mask) end
+    end
+  end
+  f._ring = opts.ring ~= false
+  function f:SetRoundSize(sz)
+    sz = tonumber(sz) or 31
+    self._size = sz
+    local k = sz / 31
+    self:SetSize(sz, sz)
+    self.disc:ClearAllPoints() self.icon:ClearAllPoints() self.ring:ClearAllPoints()
+    if self._ring then
+      self.disc:SetSize(20 * k, 20 * k)
+      self.disc:SetPoint("TOPLEFT", self, "TOPLEFT", 7 * k, -5 * k)
+      self.icon:SetSize(17 * k, 17 * k)
+      self.icon:SetPoint("TOPLEFT", self, "TOPLEFT", 7 * k, -6 * k)
+      self.ring:SetSize(53 * k, 53 * k)
+      self.ring:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0)
+      self.disc:Show() self.ring:Show()
+    else
+      self.icon:SetAllPoints(self)
+      self.disc:Hide() self.ring:Hide()
+    end
+  end
+  function f:SetRing(on)
+    on = on and true or false
+    if on == self._ring then return end
+    self._ring = on
+    self:SetRoundSize(self._size)
+  end
+  function f:SetIcon(file, coords)
+    self.icon:SetTexture(file)
+    local tc = coords
+    if type(tc) ~= "table" then
+      tc = (type(file) == "string" and file:lower():find("^interface[\\/]icons[\\/]")) and { 0.08, 0.92, 0.08, 0.92 } or { 0, 1, 0, 1 }
+    end
+    Call(self.icon, "SetTexCoord", tc[1], tc[2], tc[3], tc[4])
+  end
+  f:SetRoundSize(size)
+  if opts.icon then f:SetIcon(opts.icon, opts.iconCoords) end
   return f
 end
 
@@ -2306,7 +2377,30 @@ function Kit.Window(name, opts)
     self.subtitle:SetText(text and text ~= "" and Upper(text) or "")
     self:Layout()
   end
-  function f:SetStatus(text) if self.status then self.status:SetText(text or "") Kit.Fit(self.status, (self._w or 400) - 40) end end
+  -- (minor 22) onClick(win): the footer text takes a click (hover: title colour); tooltip = { title, lines, hint }
+  function f:SetStatus(text, onClick, tooltip)
+    if not self.status then return end
+    self.status:SetText(text or "")
+    Kit.Fit(self.status, (self._w or 400) - 40)
+    if type(onClick) == "function" and not self.statusHit then
+      local b = CreateFrame("Button", nil, self.footer)
+      b:SetPoint("TOPLEFT", self.status, "TOPLEFT", -4, 4)
+      b:SetPoint("BOTTOMRIGHT", self.status, "BOTTOMRIGHT", 4, -4)
+      b:SetScript("OnEnter", function(hit)
+        TextColor(self.status, C.title)
+        local t = hit.tip
+        if t then Kit.Tooltip(hit, t[1], t[2], t[3]) end
+      end)
+      b:SetScript("OnLeave", function(hit) TextColor(self.status, C.muted) Kit.HideTooltip(hit) end)
+      b:SetScript("OnClick", function(hit) if hit.fn then Safe("status click", hit.fn, self) end end)
+      self.statusHit = b
+    end
+    local b = self.statusHit
+    if b then
+      b.fn, b.tip = type(onClick) == "function" and onClick or nil, type(tooltip) == "table" and tooltip or nil
+      if b.fn then b:Show() else b:Hide() TextColor(self.status, C.muted) end
+    end
+  end
   function f:ClampSize()
     local w, h = self:GetWidth() or minW, self:GetHeight() or minH
     local cw, ch = Clamp(w, minW, maxW), Clamp(h, minH, maxH)
@@ -4215,6 +4309,18 @@ function Kit.ActionBar(parent)
     self.nActions = #(list or {})
     self:Layout(self._w or self:GetWidth())
   end
+  -- (minor 23) a:Input(opts): one Kit.EditBox left of the buttons (an amount to buy, a count to craft), made on the
+  -- first call (opts as Kit.EditBox, opts.width 60); a.input:Show() / :Hide() / :SetShown(on), then a:Layout(). It only
+  -- takes room while shown and while the bar has a button
+  function a:Input(opts)
+    if not self.input then
+      opts = opts or {}
+      self.inputW = tonumber(opts.width) or 60
+      self.input = Kit.EditBox(self, opts)
+      self.input:Hide()
+    end
+    return self.input
+  end
   function a:Layout(w)
     w = tonumber(w) or 0
     self._w = w
@@ -4227,6 +4333,13 @@ function Kit.ActionBar(parent)
       b:SetPoint("RIGHT", self, "RIGHT", -rx, 0)
       b:Layout(bw)
       rx = rx + bw + S.unit
+    end
+    local inp = self.input
+    if inp and inp:IsShown() and (self.nActions or 0) > 0 then
+      inp:ClearAllPoints()
+      inp:SetPoint("RIGHT", self, "RIGHT", -(rx - S.unit + S.gap), 0)
+      inp:Layout(self.inputW)
+      rx = rx - S.unit + S.gap + self.inputW + S.unit
     end
     local x = S.pad + (self.icon:IsShown() and S.iconMid + S.gap or 0)
     self.title:ClearAllPoints() self.sub:ClearAllPoints()
@@ -4245,6 +4358,149 @@ function Kit.ActionBar(parent)
   a:SetScript("OnEnter", function(self) CutTip(self, nil, nil, self._cutTexts) end)
   a:SetScript("OnLeave", function(self) Kit.HideTooltip(self) end)
   return a
+end
+
+---------------------------------------------------------------------------
+-- (minor 23) PlaceRight: a row of controls from the right edge of a frame, as over a list (buttons, dropdowns, a number
+-- box). list = { { frame, width, show }, ... }, the first stands at the edge; show == false (or nil frame) hides the
+-- control and it takes no room. opts.x (S.pad), opts.y (-6), opts.gap (S.gap), opts.point ("TOPRIGHT").
+-- Returns the width taken from the edge, the room left of the row starts there.
+---------------------------------------------------------------------------
+function Kit.PlaceRight(parent, list, opts)
+  opts = opts or {}
+  local rx, y, gap, point = tonumber(opts.x) or S.pad, tonumber(opts.y) or -6, tonumber(opts.gap) or S.gap, opts.point or "TOPRIGHT"
+  for _, e in ipairs(list or {}) do
+    local f, w = e[1], tonumber(e[2]) or 80
+    if f then
+      if e[3] == false then Call(f, "Hide")
+      else
+        Call(f, "Show")
+        f:ClearAllPoints()
+        f:SetPoint(point, parent, point, -rx, y)
+        if f.Layout then f:Layout(w) else Call(f, "SetWidth", w) end
+        rx = rx + w + gap
+      end
+    end
+  end
+  return rx
+end
+
+---------------------------------------------------------------------------
+-- (minor 23) SecureButton: a protected action button (SecureActionButtonTemplate: a macro, a spell, an item on click) in
+-- the look of a primary Kit.Button. Kit.Button itself is no secure template, so an addon styled its own. The caller sets
+-- the attributes and its own scripts (PreClick, OnEnter); it must hang on UIParent or another unprotected frame it only
+-- anchors to (a protected child makes its parent protected) and is left alone in combat.
+-- b.text, b:SetLabel(text) (cut to the width), opts.width (200), opts.height (24), opts.clicks (default: key down or up
+-- as the client's action buttons)
+---------------------------------------------------------------------------
+function Kit.SecureButton(name, parent, opts)
+  opts = opts or {}
+  local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
+  b:SetHeight(tonumber(opts.height) or 24)
+  b:SetWidth(tonumber(opts.width) or 200)
+  local down = type(GetCVarBool) == "function" and GetCVarBool("ActionButtonUseKeyDown")
+  Call(b, "RegisterForClicks", opts.clicks or (down and "AnyDown" or "AnyUp"))
+  Fill(b, C.primary)
+  b.bd = Border(b, C.gold)
+  b.text = Text(b, "row", C.txGold, "CENTER")
+  b.text:SetPoint("CENTER", 0, 0)
+  function b:SetLabel(text)
+    self.text:SetText(text or "")
+    Kit.Fit(self.text, (self:GetWidth() or 200) - 12)
+  end
+  if opts.text then b:SetLabel(opts.text) end
+  return b
+end
+
+---------------------------------------------------------------------------
+-- (minor 25, 12.11.2026, Questdon's item buttons in the quest list) ItemButton: a protected button that uses an item on
+-- click (SecureActionButtonTemplate), as a symbol: the item's icon on a dark flat backing with a 1 px line, the count
+-- bottom right, the cooldown over it, a small watch top right while a change waits for the end of a fight.
+-- Same rules as SecureButton: it hangs on UIParent (never on a frame that moves in combat, and never anchored to one:
+-- a frame a protected frame is anchored to may not move in combat either), and its attributes, place, size and
+-- Show/Hide only change out of combat. What may change in combat: icon, count, cooldown, watch, dimming.
+-- opts.size (36), opts.clicks, opts.frame = false (no backing: the caller draws its own).
+-- b.icon, b.count, b.cooldown, b.wait, b.bg, b.bd, b.itemID
+-- b:SetItem(itemID) -> true when set (false in combat: nothing changed); nil takes the item off (the caller hides it)
+-- b:SetCount(n) (shown from 2 on), b:UpdateCooldown(), b:SetWaiting(on), b:SetFar(on) (grey and half clear)
+---------------------------------------------------------------------------
+local function InFight() return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false end
+function Kit.ItemButton(name, parent, opts)
+  opts = opts or {}
+  local size = tonumber(opts.size) or 36
+  local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
+  b:SetSize(size, size)
+  -- both, as the client's own action buttons: the template itself takes the one the player's key-down setting asks for
+  if opts.clicks then Call(b, "RegisterForClicks", opts.clicks) else Call(b, "RegisterForClicks", "AnyUp", "AnyDown") end
+  if opts.frame ~= false then
+    b.bg = Tex(b, "BACKGROUND", C.input)
+    b.bg:SetPoint("TOPLEFT", -1, 1) b.bg:SetPoint("BOTTOMRIGHT", 1, -1)
+    b.bd = Border(b, C.goldMuted, -1)
+  end
+  b.icon = b:CreateTexture(nil, "ARTWORK")
+  b.icon:SetAllPoints()
+  Call(b.icon, "SetTexCoord", 0.07, 0.93, 0.07, 0.93)
+  b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+  b.count:SetPoint("BOTTOMRIGHT", -2, 2)
+  b.wait = b:CreateTexture(nil, "OVERLAY")
+  local ws = max(10, floor(size * 0.4 + 0.5))
+  b.wait:SetSize(ws, ws)
+  b.wait:SetPoint("TOPRIGHT", b, "TOPRIGHT", 3, 3)
+  b.wait:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
+  b.wait:Hide()
+  b.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+  b.cooldown:SetAllPoints()
+  Call(b, "SetHighlightTexture", "Interface\\Buttons\\ButtonHilight-Square", "ADD")
+  Call(b, "SetPushedTexture", "Interface\\Buttons\\UI-Quickslot-Depress")
+  function b:SetItem(itemID)
+    if InFight() then return false end
+    itemID = tonumber(itemID)
+    self.itemID = itemID
+    if not itemID then
+      self:SetAttribute("type", nil)
+      self:SetAttribute("item", nil)
+      return true
+    end
+    self:SetAttribute("type", "item")
+    self:SetAttribute("item", "item:" .. itemID)
+    local icon
+    if type(C_Item) == "table" and type(C_Item.GetItemIconByID) == "function" then
+      local ok, tex = pcall(C_Item.GetItemIconByID, itemID)
+      icon = ok and tex or nil
+    end
+    self.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+    self.far = nil
+    Call(self.icon, "SetDesaturated", false)
+    self.icon:SetAlpha(1)
+    self:UpdateCooldown()
+    return true
+  end
+  function b:SetCount(n)
+    n = tonumber(n)
+    self.count:SetText(n and n > 1 and n or "")
+  end
+  function b:UpdateCooldown()
+    if not self.itemID then return end
+    local get = type(C_Container) == "table" and C_Container.GetItemCooldown
+    if type(get) ~= "function" then return end
+    local ok, start, duration = pcall(get, self.itemID)
+    -- SetCooldown takes secret values: no arithmetic here
+    if ok and start then self.cooldown:SetCooldown(start, duration) end
+  end
+  function b:SetWaiting(on)
+    on = on and true or false
+    if self.waiting == on then return end
+    self.waiting = on
+    if on then self.wait:Show() else self.wait:Hide() end
+  end
+  function b:SetFar(far)
+    far = far and true or false
+    if self.far == far then return end
+    self.far = far
+    Call(self.icon, "SetDesaturated", far)
+    self.icon:SetAlpha(far and 0.55 or 1)
+  end
+  return b
 end
 
 ---------------------------------------------------------------------------
@@ -4310,6 +4566,8 @@ function Kit.LineChart(parent, opts)
   c.xr = Text(c, "mono", C.quiet, "RIGHT")
   c.empty = Text(c, "sub", C.quiet, "CENTER")
   c.empty:SetPoint("CENTER", c.plot, "CENTER", 0, 0)
+  c.legend = Text(c, "mono", C.quiet, "LEFT") -- (minor 24)
+  c.legend:Hide()
   c.dot = Tex(c.plot, "OVERLAY", C.hero)
   c.dot:SetSize(5, 5)
   c.dot:Hide()
@@ -4370,9 +4628,33 @@ function Kit.LineChart(parent, opts)
       Kit.Fit(self.empty, max(20, pw - 16))
       self.empty:Show()
       self.range = nil
+      self.clipped = nil
+      self.legend:Hide()
       return
     end
     self.empty:Hide()
+    -- (minor 24) one peak far above the rest: the axis ends a little over the 90 % value, the peak is cut at the top
+    self.clipped = nil
+    local cp = tonumber(opts.clipPeak)
+    if cp and cp > 1 and n >= 10 then
+      local ys = {}
+      for _, s in ipairs(self.series) do for _, p in ipairs(s.points or {}) do ys[#ys + 1] = p[2] end end
+      table.sort(ys)
+      local q = ys[max(1, floor(#ys * 0.9))]
+      if q > lo and hi > lo + (q - lo) * cp then self.clipped = hi hi = lo + (q - lo) * 1.15 end
+    end
+    if opts.legend then
+      local bits = {}
+      for si, s in ipairs(self.series) do
+        if s.label then bits[#bits + 1] = "|c" .. Hexa(s.color or (si == 1 and C.goldBright or C.blue)) .. s.label .. "|r" end
+      end
+      if self.clipped and opts.clipText then bits[#bits + 1] = tostring(opts.clipText(self.clipped) or "") end
+      self.legend:SetText(table.concat(bits, "   "))
+      self.legend:ClearAllPoints()
+      self.legend:SetPoint("TOPLEFT", self.plot, "TOPLEFT", 6, -2)
+      Kit.Fit(self.legend, max(20, pw - 12))
+      self.legend:Show()
+    else self.legend:Hide() end
     if hi - lo <= 0 then lo, hi = lo - 1, hi + 1 end
     local pad = (hi - lo) * 0.08
     lo, hi = lo - pad, hi + pad
@@ -4392,7 +4674,7 @@ function Kit.LineChart(parent, opts)
     self.xr:ClearAllPoints() self.xr:SetPoint("TOPRIGHT", self.plot, "BOTTOMRIGHT", 0, -3)
     Kit.Fit(self.xl, floor(pw / 2) - 4) Kit.Fit(self.xr, floor(pw / 2) - 4)
     local function X(x) return (x - x0) / (x1 - x0) * pw end
-    local function Y(y) return (y - lo) / (hi - lo) * ph end
+    local function Y(y) return min(ph, (y - lo) / (hi - lo) * ph) end
     local k, lines = 0, not self.noLines and self.plot.CreateLine ~= nil
     for si, s in ipairs(self.series) do
       local pts = s.points or {}
@@ -4430,7 +4712,7 @@ function Kit.LineChart(parent, opts)
         if si == 1 then
           title = (opts.formatX or tostring)(best[1])
           self.dot:ClearAllPoints()
-          self.dot:SetPoint("CENTER", self.plot, "BOTTOMLEFT", (best[1] - r[1]) / (r[2] - r[1]) * self.pw, (best[2] - r[3]) / (r[4] - r[3]) * self.ph)
+          self.dot:SetPoint("CENTER", self.plot, "BOTTOMLEFT", (best[1] - r[1]) / (r[2] - r[1]) * self.pw, min(self.ph, (best[2] - r[3]) / (r[4] - r[3]) * self.ph))
           self.dot:Show()
         end
         lines[#lines + 1] = { s.label or ("#" .. si), fy(best[2]), s.color or (si == 1 and C.goldBright or C.blue) }

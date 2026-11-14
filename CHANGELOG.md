@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.6
+
+- **Cleaner text in narrow places:** text that is shrunk to fit keeps one font and size, also after the game window changes its size.
+
 ## 1.3.5
 
 - **The game's markers on the world map stay hidden:** when an addon asks DonMap to hide them (Questdon's option), they no longer flash up for a moment and stay hidden in combat. DonMap only hides them and no longer touches the game's own map code.
