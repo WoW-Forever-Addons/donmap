@@ -1,5 +1,10 @@
 # Changes
 
+## 1.3.7
+
+- **Fixed: error from the map when changing an option:** switching the game's quest markers back on before the world map was opened once in a session (for example from Questdon's options) no longer causes a MapCanvas error; the markers are redrawn the next time the map opens.
+- **`/donmap diag` opens a window:** the report opens in a copy window in the game's look, ready to paste; `/donmap diag chat` prints it as before.
+
 ## 1.3.6
 
 - **Cleaner text in narrow places:** text that is shrunk to fit keeps one font and size, also after the game window changes its size.

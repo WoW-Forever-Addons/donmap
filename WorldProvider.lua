@@ -311,6 +311,11 @@ function ns.ApplyGameQuestMarks()
   if MarksOn() then marks.redraw = false ns.ClearGameQuestMarks() return end
   marks.redraw = true
   if InCombatLockdown() then return end
+  -- (17.11.) only on a shown map: a map never opened this session has no zoom levels yet, and its own
+  -- RefreshAllDataProviders then errors inside secureexecuterange (pcall does not catch that); a hidden map keeps
+  -- redraw pending and draws anew on its next show (Questdon MapPins calls RedrawGameIfPending)
+  local map = WorldMapFrame
+  if not (map and map.IsShown and map:IsShown()) then return end
   RedrawGame()
 end
 

@@ -7,8 +7,8 @@ L["none yet"] = "noch keine"
 L["on"] = "an"
 L["off"] = "aus"
 L["%s: world map %d, minimap %d"] = "%s: Weltkarte %d, Minikarte %d"
-L["/donmap <source>: switch a source on or off. /donmap diag: levels of the other addons' pins."] =
-  "/donmap <Quelle>: eine Quelle an- oder ausschalten. /donmap diag: Ebenen der Pins anderer Addons."
+L["/donmap <source>: switch a source on or off. /donmap diag: a report to copy (pin levels, errors)."] =
+  "/donmap <Quelle>: eine Quelle an- oder ausschalten. /donmap diag: ein Bericht zum Kopieren (Ebenen der Pins, Fehler)."
 L["%s is now %s."] = "%s ist jetzt %s."
 L["Unknown source: %s"] = "Unbekannte Quelle: %s"
 L["Error in %s: %s"] = "Fehler in %s: %s"
@@ -57,3 +57,8 @@ L["Options"] = "Optionen"
 L["Status"] = "Status"
 L["Tools"] = "Werkzeuge"
 L["Settings"] = "Einstellungen"
+
+-- (16.11.2026) /donmap diag: the copy window
+L["Ctrl+A selects all, Ctrl+C copies."] = "Strg+A markiert alles, Strg+C kopiert."
+L["Select all"] = "Alles markieren"
+L["Close"] = "Schließen"

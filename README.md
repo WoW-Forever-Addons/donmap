@@ -11,7 +11,7 @@ by itself.
 
 - WoW Forever: `DonMap_Camelot.toc`. WoW Classic Era: `DonMap_Vanilla.toc`. Same files.
 - `/donmap`: the addons that draw through DonMap and their pins; `/donmap <name>` switches one off and on again;
-  `/donmap diag` shows the frame levels of other addons' pins.
+  `/donmap diag` opens a report to copy (version, sources, arrow, other addons' pin levels, errors); `/donmap diag chat` prints it to the chat.
 - `/donmap arrow` shows or hides the arrow, `/donmap options` opens its settings (with Questdon they are in Questdon's options).
 - Saved variables: `DonMapDB` (which sources you switched off, the arrow's settings without Questdon).
 

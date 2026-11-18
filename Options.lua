@@ -19,7 +19,7 @@ local function Status()
 end
 
 local function Help()
-  return L["/donmap <source>: switch a source on or off. /donmap diag: levels of the other addons' pins."] .. "\n"
+  return L["/donmap <source>: switch a source on or off. /donmap diag: a report to copy (pin levels, errors)."] .. "\n"
     .. L["/donmap arrow: show or hide the arrow. /donmap options: its settings."]
 end
 

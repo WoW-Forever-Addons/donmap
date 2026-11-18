@@ -119,16 +119,77 @@ events:SetScript("OnEvent", function(_, event, name)
 end)
 
 ---------------------------------------------------------------------------
+-- (16.11.2026, Daniel: "bei allen addons soll der diag befehl ein fenster zum kopieren aufmachen") /donmap diag: the
+-- report in a copy window, in the game's look (DonCore Blizz) where the client has the templates, else DonCore's Kit;
+-- should both fail, the chat as before. /donmap diag chat prints it.
+---------------------------------------------------------------------------
+function ns.DiagLines()
+  local out = {}
+  local function add(s) out[#out + 1] = s end
+  local okB, build, _, _, iface = pcall(GetBuildInfo or function() end)
+  local okL, loc = pcall(GetLocale or function() end)
+  add(("DonMap %s, client %s (interface %s), locale %s"):format(ns.VERSION or "?", okB and tostring(build) or "?",
+    okB and tostring(iface) or "?", okL and tostring(loc) or "?"))
+  local Bz = LibStub("DonCore-1.0"):Get("Blizz", 5)
+  local look = "kit"
+  if Bz and Bz.Kit then
+    local okK, k, miss = pcall(Bz.Kit)
+    look = (okK and k) and "blizzard" or ("kit (missing: " .. tostring(okK and miss or k) .. ")")
+  elseif not Bz then look = "kit (no DonCore Blizz 5)" end
+  add("window look: " .. look)
+  add(("sources: %d"):format(#ns.order))
+  for _, src in ipairs(ns.order) do
+    add(("  %s (%s): world map %d, minimap %d"):format(src.id, ns.db.off[src.id] and "off" or "on", src.n.world, src.n.minimap))
+  end
+  local okA, db = pcall(ns.ArrowLook or function() end)
+  local okC, control = pcall(ns.ArrowControl or function() end)
+  add(("arrow: %s, controlled by %s"):format(okA and type(db) == "table" and (db.arrow and "on" or "off") or "?",
+    okC and type(control) == "table" and tostring(control.id or control.name or "an addon") or "DonMap"))
+  add("pin levels of other addons:")
+  local okP, levels = pcall(ns.ForeignPinLevels)
+  if okP and type(levels) == "table" then
+    for _, line in ipairs(levels) do add("  " .. line) end
+  else add("  ? (" .. tostring(levels) .. ")") end
+  local n = 0
+  for where, e in pairs(errors) do
+    n = n + 1
+    add(("error [%s] x%d: %s"):format(where, e.count, e.msg))
+  end
+  if n == 0 then add("errors: none") end
+  return out
+end
+function ns.DiagText() return table.concat(ns.DiagLines(), "\n") end
+function ns.PrintDiag()
+  for _, line in ipairs(ns.DiagLines()) do print("  " .. line) end
+end
+function ns.ShowDiag()
+  local text = ns.DiagText()
+  local title, hint = "DonMap diag", L["Ctrl+A selects all, Ctrl+C copies."]
+  local words = { selectAll = L["Select all"], close = L["Close"] }
+  local Core = LibStub("DonCore-1.0")
+  local Bz, Kit = Core:Get("Blizz", 5), Core:Get("Kit", 11)
+  if Bz and Bz.Kit then
+    local okK, UI = pcall(Bz.Kit)
+    if okK and UI and UI.ShowCopy then
+      local ok, d = pcall(UI.ShowCopy, title, hint, text, words)
+      if ok and d then return d end
+    end
+  end
+  if Kit and Kit.ShowCopy then
+    local ok, d = pcall(Kit.ShowCopy, title, hint, text, words)
+    if ok and d then return d end
+  end
+  ns.PrintDiag()
+end
+
+---------------------------------------------------------------------------
 -- /donmap: the sources and their pins, a source on or off, the other addons' pin levels
 ---------------------------------------------------------------------------
 SLASH_DONMAP1 = "/donmap"
 function ns.Slash(msg)
   msg = (type(msg) == "string" and msg or ""):match("^%s*(.-)%s*$")
-  if msg == "diag" then
-    for _, line in ipairs(ns.ForeignPinLevels()) do print("  " .. line) end
-    for where, e in pairs(errors) do print(("  error [%s] x%d: %s"):format(where, e.count, e.msg)) end
-    return
-  end
+  if msg == "diag" then ns.ShowDiag() return end
+  if msg == "diag chat" then ns.PrintDiag() return end
   -- (M2) the arrow: its settings (DonMap's own, or the controlling addon's, e.g. Questdon's /qd arrow)
   if msg == "arrow" then
     local db = ns.ArrowLook()
@@ -155,7 +216,7 @@ function ns.Slash(msg)
     print("  " .. L["%s: world map %d, minimap %d"]:format(src.title .. " (" .. src.id .. ", " .. (ns.db.off[src.id] and L["off"] or L["on"]) .. ")",
       src.n.world, src.n.minimap))
   end
-  print("  " .. L["/donmap <source>: switch a source on or off. /donmap diag: levels of the other addons' pins."])
+  print("  " .. L["/donmap <source>: switch a source on or off. /donmap diag: a report to copy (pin levels, errors)."])
   print("  " .. L["/donmap arrow: show or hide the arrow. /donmap options: its settings."])
 end
 -- (05.11.2026) never assign the global SlashCmdList itself: that taints every chat slash command, and the first /run
