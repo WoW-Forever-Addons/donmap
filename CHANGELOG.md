@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.8
+
+- **Shared Don library:** updated to the current version of the Don addons.
+
 ## 1.3.7
 
 - **Fixed: error from the map when changing an option:** switching the game's quest markers back on before the world map was opened once in a session (for example from Questdon's options) no longer causes a MapCanvas error; the markers are redrawn the next time the map opens.

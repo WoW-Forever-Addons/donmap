@@ -1,7 +1,16 @@
-local M = LibStub("DonCore-1.0"):NewModule("Settings", 5)
+local M = LibStub("DonCore-1.0"):NewModule("Settings", 6)
 if not M then return end
 local Core = LibStub("DonCore-1.0")
 
+-- (minor 6, 20.11.2026, Daniel after a player did not find the way back to the old look: "bei allen addons den namen der
+-- option gleich machen", chosen: a choice Don / Blizzard) ns.LookOption(o): the one option item for the look of an
+-- addon's windows, the same words in every Don addon and in the game's languages: a dropdown "Window style" with
+-- "Don look" (false) and "Blizzard look" (true) on db.blizzLook (the stored value stays the boolean of the old checkbox).
+-- o = { addon = display name (default the Attach name), category = the addon's name in the game's settings (default
+-- addon), note = one more sentence of the addon, already in the game's language, onChange = function(value), key, parent }.
+-- The item is donCommon: DonCore's Options window runs its onChange itself (Options minor 5), like the minimap switch.
+-- M.LookWord(text) gives the words in the game's language. The tip also says that the windows keep the Don look where
+-- the game lacks its templates (Classic Era), so no addon needs a note for that.
 -- (minor 5, 17.11.2026, Daniel: the look of Questdon's quest list could only be picked in the start window) a "choice"
 -- item with options() (list of { value, text }) shows here as a dropdown on db[key]; its onChange(value) applies it.
 -- Choices without options() stay in the addon's window only.
@@ -68,6 +77,35 @@ local function VarType(kind, default)
     return types.String or type(default)
   end
   return types.Boolean or "boolean"
+end
+
+-- (minor 6) the words of the look choice; English is the key
+local LOOK, LOOK_DON, LOOK_BLIZZ = "Window style", "Don look", "Blizzard look"
+local LOOK_TIP = "Don look: %s's windows in the style of the Don addons. Blizzard look: the windows look like the game's own, with the game's frames, tabs, buttons and lists; the options then open in the game's settings (Options > AddOns > %s) after a /reload. Where the game lacks its templates (Classic Era) the windows keep the Don look."
+local LOOK_WORDS = {
+  deDE = { [LOOK] = "Fensterstil", [LOOK_DON] = "Don-Look", [LOOK_BLIZZ] = "Blizzard-Look",
+    [LOOK_TIP] = "Don-Look: die Fenster von %s im Stil der Don-Addons. Blizzard-Look: die Fenster sehen aus wie die des Spiels, mit Rahmen, Reitern, Knöpfen und Listen des Spiels; die Optionen öffnen dann nach einem /reload in den Einstellungen des Spiels (Optionen > AddOns > %s). Wo dem Spiel die Vorlagen fehlen (Classic Era), bleiben die Fenster im Don-Look." },
+  esES = { [LOOK] = "Estilo de ventana", [LOOK_DON] = "Aspecto Don", [LOOK_BLIZZ] = "Aspecto Blizzard",
+    [LOOK_TIP] = "Aspecto Don: las ventanas de %s con el estilo de los addons Don. Aspecto Blizzard: las ventanas se ven como las del juego, con sus marcos, pestañas, botones y listas; las opciones se abren entonces en los ajustes del juego (Opciones > AddOns > %s) tras un /reload. Donde el juego no tiene sus plantillas (Classic Era), las ventanas conservan el aspecto Don." },
+  esMX = { [LOOK] = "Estilo de ventana", [LOOK_DON] = "Aspecto Don", [LOOK_BLIZZ] = "Aspecto Blizzard",
+    [LOOK_TIP] = "Aspecto Don: las ventanas de %s con el estilo de los addons Don. Aspecto Blizzard: las ventanas se ven como las del juego, con sus marcos, pestañas, botones y listas; las opciones se abren entonces en los ajustes del juego (Opciones > AddOns > %s) tras un /reload. Donde el juego no tiene sus plantillas (Classic Era), las ventanas conservan el aspecto Don." },
+  frFR = { [LOOK] = "Style des fenêtres", [LOOK_DON] = "Style Don", [LOOK_BLIZZ] = "Style Blizzard",
+    [LOOK_TIP] = "Style Don : les fenêtres de %s dans le style des addons Don. Style Blizzard : les fenêtres ressemblent à celles du jeu, avec ses cadres, onglets, boutons et listes ; les options s'ouvrent alors dans les réglages du jeu (Options > AddOns > %s) après un /reload. Là où le jeu n'a pas ses modèles (Classic Era), les fenêtres gardent le style Don." },
+  koKR = { [LOOK] = "창 스타일", [LOOK_DON] = "Don 스타일", [LOOK_BLIZZ] = "블리자드 스타일",
+    [LOOK_TIP] = "Don 스타일: %s의 창을 Don 애드온의 스타일로 표시합니다. 블리자드 스타일: 창이 게임의 틀, 탭, 버튼, 목록을 사용해 게임 기본 창처럼 보입니다. 이때 설정은 /reload 후 게임 설정(설정 > 애드온 > %s)에서 열립니다. 게임에 해당 템플릿이 없는 경우(Classic Era) 창은 Don 스타일로 유지됩니다." },
+  ptBR = { [LOOK] = "Estilo das janelas", [LOOK_DON] = "Visual Don", [LOOK_BLIZZ] = "Visual Blizzard",
+    [LOOK_TIP] = "Visual Don: as janelas do %s no estilo dos addons Don. Visual Blizzard: as janelas ficam como as do jogo, com suas molduras, abas, botões e listas; as opções passam a abrir nas configurações do jogo (Opções > AddOns > %s) após um /reload. Onde o jogo não tem seus modelos (Classic Era), as janelas mantêm o visual Don." },
+  ruRU = { [LOOK] = "Стиль окон", [LOOK_DON] = "Стиль Don", [LOOK_BLIZZ] = "Стиль Blizzard",
+    [LOOK_TIP] = "Стиль Don: окна %s в стиле аддонов Don. Стиль Blizzard: окна выглядят как окна игры, с её рамками, вкладками, кнопками и списками; настройки тогда открываются в настройках игры (Настройки > Модификации > %s) после /reload. Там, где в игре нет нужных шаблонов (Classic Era), окна остаются в стиле Don." },
+  zhTW = { [LOOK] = "視窗風格", [LOOK_DON] = "Don 風格", [LOOK_BLIZZ] = "暴雪風格",
+    [LOOK_TIP] = "Don 風格：%s 的視窗使用 Don 插件的風格。暴雪風格：視窗看起來像遊戲內建視窗，使用遊戲的框架、分頁、按鈕和清單；此時選項會在 /reload 後於遊戲設定中開啟（選項 > 插件 > %s）。遊戲缺少這些範本時（Classic Era），視窗維持 Don 風格。" },
+  zhCN = { [LOOK] = "窗口风格", [LOOK_DON] = "Don 风格", [LOOK_BLIZZ] = "暴雪风格",
+    [LOOK_TIP] = "Don 风格：%s 的窗口使用 Don 插件的风格。暴雪风格：窗口看起来像游戏自带窗口，使用游戏的框体、标签页、按钮和列表；此时选项会在 /reload 后于游戏设置中打开（选项 > 插件 > %s）。游戏缺少这些模板时（Classic Era），窗口保持 Don 风格。" },
+}
+function M.LookWord(text)
+  local loc = type(GetLocale) == "function" and GetLocale() or nil
+  local t = type(loc) == "string" and LOOK_WORDS[loc]
+  return t and t[text] or text
 end
 
 function M:Attach(addonName, ns)
@@ -312,6 +350,18 @@ function M:Attach(addonName, ns)
 
     Settings.RegisterAddOnCategory(main)
     return main
+  end
+
+  -- (minor 6) the look of the addon's windows as a choice of two named looks (see the head of the file)
+  function ns.LookOption(o)
+    o = type(o) == "table" and o or {}
+    local addon = o.addon or addonName
+    local tip = o.tip or M.LookWord(LOOK_TIP):format(addon, o.category or addon)
+    if type(o.note) == "string" and o.note ~= "" then tip = tip .. " " .. o.note end
+    return { key = o.key or "blizzLook", kind = "dropdown", parent = o.parent, donCommon = true,
+      name = o.name or M.LookWord(LOOK), tip = tip,
+      options = function() return { { false, M.LookWord(LOOK_DON) }, { true, M.LookWord(LOOK_BLIZZ) } } end,
+      onChange = o.onChange }
   end
 
   -- Two clicks within 5 seconds for dangerous tools (no Blizzard popups).
