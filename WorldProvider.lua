@@ -228,6 +228,47 @@ local function SetKeeps(v)
   if f then pcall(f, v) end
 end
 
+-- (21.11.2026, Ruckler) the game's quest pools, found once: looked for again only when the map's set of pools (or the
+-- source's prefix) changes; the game only adds pools, it never takes one away. qpools[i] the pool, qtpl[i] its
+-- template, qblob[i] whether it holds quest areas. The active pins are read from the pool each time (a pool may get a
+-- new activeObjects table).
+local qpools, qtpl, qblob = {}, {}, {}
+local qstate = { n = 0, src = nil, count = -1, prefix = nil }
+local function QuestPools(pools)
+  local c = 0
+  for _ in pairs(pools) do c = c + 1 end
+  if pools == qstate.src and c == qstate.count and marks.prefix == qstate.prefix then return qstate.n end
+  for i = qstate.n, 1, -1 do qpools[i], qtpl[i], qblob[i] = nil, nil, nil end
+  local n = 0
+  for t, pool in pairs(pools) do
+    if ns.IsGameQuestTemplate(t) then -- (the pool itself is read with a type check: a test map holds true there)
+      n = n + 1
+      qpools[n], qtpl[n], qblob[n] = pool, t, t:find("QuestBlob") ~= nil
+    end
+  end
+  qstate.n, qstate.src, qstate.count, qstate.prefix = n, pools, c, marks.prefix
+  return n
+end
+
+-- (21.11.2026, Ruckler) one scan of a template without a closure or a table per call: scan.* in, drop[1..scan.n] out
+local scan = { map = nil, t = nil, blob = false, unknown = false, seen = 0, n = 0 }
+local drop = {}
+local function ScanPins()
+  local map, blob = scan.map, scan.blob
+  for pin in map:EnumeratePinsByTemplate(scan.t) do
+    scan.seen = scan.seen + 1
+    local keep = false
+    if not blob and Keeps() ~= false then
+      keep = Keep(pin)
+      if keep == nil then scan.unknown = true end
+    end
+    if not keep then scan.n = scan.n + 1 drop[scan.n] = pin end
+  end
+end
+local function ScanAll()
+  for pin in scan.map:EnumeratePinsByTemplate(scan.t) do scan.n = scan.n + 1 drop[scan.n] = pin end
+end
+
 -- (10.11.2026, Daniel: "wieso denn nicht immer auf hide, wenn man das ausgewählt hat") The game's markers are only
 -- hidden (pin:Hide()), never removed: no call into the game's providers or pin pools, so nothing of the game is
 -- changed by us (no taint), and it works in combat too (before, the markers stood on the map during a fight and went
@@ -238,39 +279,32 @@ function ns.ClearGameQuestMarks()
   st.providers, st.templates, st.runs = 0, 0, st.runs + 1
   local map = WorldMapFrame
   if not (map and type(map.pinPools) == "table" and map.EnumeratePinsByTemplate) then return 0 end
-  for t in pairs(map.pinPools) do
-    if ns.IsGameQuestTemplate(t) then
-      local blob = t:find("QuestBlob") ~= nil
-      local drop, unknown, seen = nil, false, 0
-      local ok = pcall(function()
-        for pin in map:EnumeratePinsByTemplate(t) do
-          seen = seen + 1
-          local keep = false
-          if not blob and Keeps() ~= false then
-            keep = Keep(pin)
-            if keep == nil then unknown = true end
-          end
-          if not keep then drop = drop or {} drop[#drop + 1] = pin end
+  for i = 1, QuestPools(map.pinPools) do
+    local t, blob = qtpl[i], qblob[i]
+    scan.map, scan.t, scan.blob, scan.unknown, scan.seen, scan.n = map, t, blob, false, 0, 0
+    local ok = pcall(ScanPins)
+    if ok then
+      if not blob then
+        -- the round markers: those the source wants stay; if they cannot be told apart all go and the source
+        -- draws its own (true only once pins were seen that carry their quest)
+        if scan.unknown then
+          SetKeeps(false)
+          for j = scan.n, 1, -1 do drop[j] = nil end
+          scan.n = 0
+          pcall(ScanAll)
+        elseif scan.seen > 0 and Keeps() ~= false then
+          SetKeeps(true)
         end
-      end)
-      if ok then
-        if not blob then
-          -- the round markers: those the source wants stay; if they cannot be told apart all go and the source
-          -- draws its own (true only once pins were seen that carry their quest)
-          if unknown then
-            SetKeeps(false)
-            drop = {}
-            pcall(function() for pin in map:EnumeratePinsByTemplate(t) do drop[#drop + 1] = pin end end)
-          elseif seen > 0 and Keeps() ~= false then
-            SetKeeps(true)
-          end
-        end
-        for _, pin in ipairs(drop or {}) do
-          if type(pin) == "table" and pin.Hide and pcall(pin.Hide, pin) then marks.hidden[pin] = t end
-        end
-        st.templates = st.templates + 1
       end
     end
+    -- (as before: what a failed scan collected up to the error is hidden too)
+    for j = 1, scan.n do
+      local pin = drop[j]
+      drop[j] = nil
+      if type(pin) == "table" and pin.Hide and pcall(pin.Hide, pin) then marks.hidden[pin] = t end
+    end
+    scan.map, scan.t = nil, nil
+    st.templates = st.templates + 1
   end
   return st.templates
 end
@@ -323,10 +357,11 @@ end
 function ns.GameMarkShown(map)
   local pools = map and map.pinPools
   if type(pools) ~= "table" then return false end
-  for t, pool in pairs(pools) do
-    if ns.IsGameQuestTemplate(t) and type(pool) == "table" and type(pool.activeObjects) == "table" then
-      local blob = t:find("QuestBlob") ~= nil
-      for pin in pairs(pool.activeObjects) do
+  for i = 1, QuestPools(pools) do
+    local pool, blob = qpools[i], qblob[i]
+    local objs = type(pool) == "table" and pool.activeObjects
+    if type(objs) == "table" then
+      for pin in pairs(objs) do
         if type(pin) == "table" and pin.IsShown and pin:IsShown() and (blob or Keeps() == false or Keep(pin) ~= true) then
           return true
         end
@@ -339,10 +374,49 @@ end
 function ns.HideGameQuestMarks(id, opts)
   assert(type(id) == "string" and type(opts) == "table" and type(opts.on) == "function", "DonMapAPI.HideGameQuestMarks: id and opts.on expected")
   marks.id, marks.opts, marks.prefix = id:lower(), opts, opts.prefix
+  qstate.src = nil
   return marks
 end
 
-local function WatchCheck(map) if ns.GameMarkShown(map) then ns.ClearGameQuestMarks() end end
+-- (21.11.2026, Ruckler) The full look (every pin, opts.keep per shown pin) ran every frame while the map was open.
+-- Now each frame only counts the active and the shown pins of the game's quest pools (no call into the source); the
+-- full look runs when one of the two counts changed since the last look (the game drew), every frame for WATCH_BUSY
+-- seconds after a quest event, an open or a change of the map, and else every WATCH_EVERY seconds. A marker the game
+-- shows again raises the shown count, so it is still hidden in the same frame.
+local WATCH_BUSY, WATCH_EVERY = 0.3, 0.15
+local watchState = { busyUntil = 0, nextLook = 0, active = -1, shown = -1, mapID = nil, open = false }
+local function Now() return ns.Num(ns.Call(GetTime)) or 0 end
+local function PinCounts(map)
+  local active, shown = 0, 0
+  local pools = map.pinPools
+  if type(pools) ~= "table" then return 0, 0 end
+  for i = 1, QuestPools(pools) do
+    local pool = qpools[i]
+    local objs = type(pool) == "table" and pool.activeObjects
+    if type(objs) == "table" then
+      for pin in pairs(objs) do
+        active = active + 1
+        if type(pin) == "table" and pin.IsShown and pin:IsShown() then shown = shown + 1 end
+      end
+    end
+  end
+  return active, shown
+end
+function ns.GameMarksBusy() watchState.busyUntil = Now() + WATCH_BUSY end
+local function WatchCheck(map)
+  local now = Now()
+  local ws = watchState
+  local mapID = ns.Num(ns.Call(map.GetMapID, map))
+  if not ws.open or mapID ~= ws.mapID then ws.open, ws.mapID, ws.busyUntil = true, mapID, now + WATCH_BUSY end
+  local active, shown = PinCounts(map)
+  if active == ws.active and shown == ws.shown and now > ws.busyUntil and now < ws.nextLook then return end
+  ws.nextLook = now + WATCH_EVERY
+  if ns.GameMarkShown(map) then
+    ns.ClearGameQuestMarks()
+    active, shown = PinCounts(map)
+  end
+  ws.active, ws.shown = active, shown
+end
 local watch = CreateFrame("Frame")
 watch:SetScript("OnUpdate", function(_, dt)
   if not marks.opts then return end
@@ -351,10 +425,14 @@ watch:SetScript("OnUpdate", function(_, dt)
   -- (31.10., D19 looked every 0.15 s and the events below cleared 0.05 s later: both a few frames late.) Closed map:
   -- nothing but the Shown check; the look itself only reads the map's pools.
   local map = WorldMapFrame
-  if not Shown(map) or not MarksOn() then return end -- in combat too: hiding is allowed there
+  if not Shown(map) or not MarksOn() then watchState.open = false return end -- in combat too: hiding is allowed there
   ns.Safe("game markers watch", WatchCheck, map) -- no closure per frame
 end)
 local markEvents = CreateFrame("Frame")
 -- (Era has no SUPER_TRACKING_CHANGED: an unknown event is an error there)
 for _, e in ipairs({ "QUEST_LOG_UPDATE", "QUEST_POI_UPDATE", "SUPER_TRACKING_CHANGED", "ZONE_CHANGED_NEW_AREA" }) do pcall(markEvents.RegisterEvent, markEvents, e) end
-markEvents:SetScript("OnEvent", function() if marks.opts and Shown(WorldMapFrame) then ns.QueueClearGameQuestMarks() end end)
+markEvents:SetScript("OnEvent", function()
+  if not marks.opts then return end
+  ns.GameMarksBusy() -- (21.11.2026, Ruckler) the watch looks fully every frame for a moment
+  if Shown(WorldMapFrame) then ns.QueueClearGameQuestMarks() end
+end)

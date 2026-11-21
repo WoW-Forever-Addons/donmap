@@ -1,5 +1,9 @@
 # Changes
 
+## 1.3.9
+
+- **Smoother map:** with the world map open, hiding the game's quest markers now only counts pins each frame and looks closer only when something changed. The markers still never flash.
+
 ## 1.3.8
 
 - **Shared Don library:** updated to the current version of the Don addons.
