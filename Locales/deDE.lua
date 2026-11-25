@@ -46,7 +46,8 @@ L["Arrow with the distance to the target an addon gave it. Drag to move, right c
   "Pfeil mit der Entfernung zu dem Ziel, das ein Addon ihm gegeben hat. Ziehen zum Verschieben, Rechtsklick verwirft ein angeklicktes Ziel."
 L["Sources: %d"] = "Quellen: %d"
 L["The arrow's settings are in %s's options."] = "Die Einstellungen des Pfeils stehen in den Optionen von %s."
-L["/donmap arrow: show or hide the arrow. /donmap options: its settings."] = "/donmap arrow: Pfeil zeigen oder verstecken. /donmap options: seine Einstellungen."
+L["/donmap: the settings. /donmap arrow: show or hide the arrow. /donmap status: the sources and their pins."] =
+  "/donmap: die Einstellungen. /donmap arrow: Pfeil zeigen oder verstecken. /donmap status: die Quellen und ihre Pins."
 L["The arrow is now %s."] = "Der Pfeil ist jetzt %s."
 L["Hides the plate behind the arrow's text and its frame: only the arrow and the writing stay."] =
   "Blendet die Tafel hinter dem Text des Pfeils und ihren Rahmen aus: nur Pfeil und Schrift bleiben."

@@ -20,7 +20,7 @@ end
 
 local function Help()
   return L["/donmap <source>: switch a source on or off. /donmap diag: a report to copy (pin levels, errors)."] .. "\n"
-    .. L["/donmap arrow: show or hide the arrow. /donmap options: its settings."]
+    .. L["/donmap: the settings. /donmap arrow: show or hide the arrow. /donmap status: the sources and their pins."]
 end
 
 local function Build()

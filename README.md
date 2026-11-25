@@ -10,9 +10,10 @@ your corpse) and the compass for windows are DonMap's too: Questdon, Leveldon an
 by itself.
 
 - WoW Forever: `DonMap_Camelot.toc`. WoW Classic Era: `DonMap_Vanilla.toc`. Same files.
-- `/donmap`: the addons that draw through DonMap and their pins; `/donmap <name>` switches one off and on again;
+- `/donmap` (or `/donmap options`) opens the settings (with Questdon they are in Questdon's options).
+- `/donmap status`: the addons that draw through DonMap and their pins; `/donmap <name>` switches one off and on again;
   `/donmap diag` opens a report to copy (version, sources, arrow, other addons' pin levels, errors); `/donmap diag chat` prints it to the chat.
-- `/donmap arrow` shows or hides the arrow, `/donmap options` opens its settings (with Questdon they are in Questdon's options).
+- `/donmap arrow` shows or hides the arrow.
 - Saved variables: `DonMapDB` (which sources you switched off, the arrow's settings without Questdon).
 
 For addon authors: `DonMapAPI` (version 5: the arrow since 2, sticky minimap sources since 3, world map pins through the map's data provider and hiding the game's quest markers since 4, the arrow as a compass only (`SetArrowCompass`) since 5), see `API.lua`.

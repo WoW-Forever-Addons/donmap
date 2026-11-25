@@ -183,7 +183,7 @@ function ns.ShowDiag()
 end
 
 ---------------------------------------------------------------------------
--- /donmap: the sources and their pins, a source on or off, the other addons' pin levels
+-- /donmap: the options; /donmap status: the sources and their pins; a source on or off, the other addons' pin levels
 ---------------------------------------------------------------------------
 SLASH_DONMAP1 = "/donmap"
 function ns.Slash(msg)
@@ -199,8 +199,10 @@ function ns.Slash(msg)
     ns.Print(L["The arrow is now %s."]:format(db.arrow and L["on"] or L["off"]))
     return
   end
-  if msg == "options" or msg == "config" then ns.OpenOptions() return end
-  if msg ~= "" then
+  -- (24.11.2026, Fenstercheck b7: "/donmap" only wrote chat lines) the bare command opens the options like the other
+  -- Don addons; the list of the sources and their pins moved to /donmap status.
+  if msg == "" or msg == "options" or msg == "config" then ns.OpenOptions() return end
+  if msg ~= "status" and msg ~= "list" and msg ~= "help" then
     local src = ns.sources[msg:lower()]
     if not src then ns.Print(L["Unknown source: %s"]:format(msg)) return end
     ns.db.off[src.id] = (not ns.db.off[src.id]) or nil
@@ -217,7 +219,7 @@ function ns.Slash(msg)
       src.n.world, src.n.minimap))
   end
   print("  " .. L["/donmap <source>: switch a source on or off. /donmap diag: a report to copy (pin levels, errors)."])
-  print("  " .. L["/donmap arrow: show or hide the arrow. /donmap options: its settings."])
+  print("  " .. L["/donmap: the settings. /donmap arrow: show or hide the arrow. /donmap status: the sources and their pins."])
 end
 -- (05.11.2026) never assign the global SlashCmdList itself: that taints every chat slash command, and the first /run
 -- then fails ("DonMap has been blocked", SetAllowDangerousScripts, taint.log on Forever live).

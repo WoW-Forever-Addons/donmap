@@ -1,5 +1,10 @@
 # Changes
 
+## 1.4.0
+
+- **Options in one window:** the options button, the gear and `/donmap` without a word open only DonMap's own options window. The list of sources and their pins moved to `/donmap status`. The game's AddOns list keeps just a button to the options.
+- **Look of the options:** check marks with a light border, tooltips of wide lines beside the mouse so they cover nothing, and right-aligned table headers.
+
 ## 1.3.9
 
 - **Smoother map:** with the world map open, hiding the game's quest markers now only counts pins each frame and looks closer only when something changed. The markers still never flash.
