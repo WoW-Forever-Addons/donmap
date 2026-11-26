@@ -232,6 +232,35 @@ local function OpenMapTop(api)
   return ok and type(top) == "number" and top or nil
 end
 
+-- (26.11.2026) the level a source's world map pins get on the shown map: its layer, above the canvas, with opts.top
+-- above Questdon's quest pins, with OpenMap above its art. fresh: look up the top level now (DonMapAPI.WorldPinsTop)
+function ns.SourceWorldLevel(src, lv, fresh)
+  if fresh and src.opts.top then ns.ForgetTopLevel() end
+  local topLv = src.opts.top and ns.TopWorldLevel() or nil
+  local om = OpenMapOn()
+  local omTop = om and OpenMapTop(om) or nil
+  if omTop and (not topLv or topLv <= omTop) then topLv = omTop + 2 end
+  local level = ns.WorldLevel(ns.Layer(src), lv)
+  if topLv and topLv > level then level = topLv end
+  return level, topLv
+end
+
+-- (26.11.2026) the highest level the sources shown on the world map draw at (nil: none); Questdon puts its "?" above it
+function ns.WorldPinsTop()
+  local wm = WorldMapFrame
+  local canvas = Canvas()
+  if not canvas or not (wm and wm.IsShown and wm:IsShown()) then return nil end
+  local lv = ns.Num(ns.Ask(canvas, "GetFrameLevel"))
+  local hi
+  for _, src in ipairs(ns.order) do
+    if ns.Enabled(src, "world") then -- also before its first pin: a member walking in later stays under the "?"
+      local level = ns.SourceWorldLevel(src, lv, true)
+      if not hi or level > hi then hi = level end
+    end
+  end
+  return hi
+end
+
 -- whole screen pixels: the canvas is drawn at "scale", so a size or place of k / scale is k pixels on the screen
 local function Px(v, scale) return math.floor(v * scale + 0.5) / scale end
 
@@ -251,10 +280,9 @@ function ns.DrawWorld(src, force)
   local scale = math.max(0.2, sc and sc.GetCanvasScale and ns.Num(ns.Call(sc.GetCanvasScale, sc)) or 1)
   local size, gsize, near = ns.Sizes(src, "world")
   local lv = ns.Num(ns.Ask(canvas, "GetFrameLevel"))
-  local topLv = src.opts.top and ns.TopWorldLevel() or nil
+  local level, topLv = ns.SourceWorldLevel(src, lv)
   local om = OpenMapOn()
   local omTop = om and OpenMapTop(om) or nil
-  if omTop and (not topLv or topLv <= omTop) then topLv = omTop + 2 end
   -- (M3) the points' signature apart: a long list made a new long string every 0.1 s while the map was open
   -- (31.10.2026, D18) the view in numbers on src.view: no table and no string every 0.1 s
   local v, vmap, vlv = src.view, (map or 0) + (om and 0.5 or 0), (lv or -1) + (topLv or 0) * 100000
@@ -277,8 +305,6 @@ function ns.DrawWorld(src, force)
       end
     end
     onMap = buf.n
-    local level = ns.WorldLevel(ns.Layer(src), lv)
-    if topLv and topLv > level then level = topLv end
     local groups, ng = ns.Group(buf, near / scale)
     for gi = 1, ng do
       local g = groups[gi]

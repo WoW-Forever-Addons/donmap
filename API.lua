@@ -223,6 +223,14 @@ API.SetArrowCompass = function(id, on) return ns.SetArrowCompass(id, on) end
 ---------------------------------------------------------------------------
 API.version = 6
 
+---------------------------------------------------------------------------
+-- Version 7 (26.11.2026, Daniel: Questdon's "?" above a guild pin): DonMapAPI.WorldPinsTop() is the highest level of
+-- the sources' world map pins on the open world map (nil: none shown). A map pin with pin.donMapOver = true does not count for
+-- opts.top, so it can lie above those sources without both climbing in turn.
+---------------------------------------------------------------------------
+API.version = 7
+API.WorldPinsTop = function() return ns.WorldPinsTop() end
+
 DonMapAPI = API
 ns.API = API
 

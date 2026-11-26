@@ -29,7 +29,9 @@ function ns.TopWorldLevel()
     for _, tpl in ipairs(TOP_TEMPLATES) do
       pcall(function()
         for pin in wm:EnumeratePinsByTemplate(tpl) do
-          local l = ns.Ask(pin, "GetFrameLevel")
+          -- (26.11.2026, Daniel: Questdon's "?" above a guild pin) a pin marked donMapOver stays above the top sources
+          -- (Questdon's raised turn-ins, ns.RaiseTurnInPins): it does not count, else both would climb in turn
+          local l = not pin.donMapOver and ns.Ask(pin, "GetFrameLevel")
           if type(l) == "number" and (not hi or l > hi) then hi = l end
         end
       end)

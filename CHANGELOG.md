@@ -1,5 +1,9 @@
 # Changes
 
+## 1.4.1
+
+- **Quest "?" on top:** addons can ask for their pins to lie above DonMap's pins (API 7). Questdon uses it so its "?" stays visible above guild members.
+
 ## 1.4.0
 
 - **Options in one window:** the options button, the gear and `/donmap` without a word open only DonMap's own options window. The list of sources and their pins moved to `/donmap status`. The game's AddOns list keeps just a button to the options.
